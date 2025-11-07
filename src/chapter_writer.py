@@ -9,11 +9,12 @@ from src.utils import save_text, load_text, save_json, load_json
 class ChapterWriter:
     """Generate detailed chapter content from outlines."""
     
-    def __init__(self, llm_client, checkpoint_manager, logger, config, entity_manager):
+    def __init__(self, llm_client, checkpoint_manager, logger, config, entity_manager, paths):
         self.llm_client = llm_client
         self.checkpoint = checkpoint_manager
         self.logger = logger
         self.config = config
+        self.paths = paths
         self.entity_manager = entity_manager
         self.target_words = config['story']['target_words_per_chapter']
         self.last_chapter_chars = config['story']['last_chapter_context_chars']
@@ -52,12 +53,13 @@ class ChapterWriter:
         system_message = f"""Bạn là một tác giả truyện tu tiên tài năng, có khả năng viết những đoạn văn sinh động, 
         hấp dẫn với các mô tả chi tiết và đối thoại tự nhiên. Hãy viết chương truyện khoảng {self.target_words} từ."""
         
-        # Call LLM
+        # Call LLM with chapter_id
         result = self.llm_client.call(
             prompt=prompt,
             task_name="chapter_writing",
             system_message=system_message,
-            max_tokens=8000  # Allow longer output
+            max_tokens=8000,  # Allow longer output
+            chapter_id=chapter_num
         )
         
         chapter_content = result['response']
@@ -255,10 +257,8 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
     
     def _save_chapter(self, content: str, chapter_num: int, title: str):
         """Save chapter content to file."""
-        output_dir = self.config['paths']['output_dir']
-        
         # Save as text file
-        text_file = os.path.join(output_dir, 'chapters', f'chapter_{chapter_num:03d}.txt')
+        text_file = os.path.join(self.paths['chapters_dir'], f'chapter_{chapter_num:03d}.txt')
         save_text(content, text_file)
         
         # Also save metadata
@@ -268,15 +268,14 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
             'word_count': len(content.split()),
             'char_count': len(content)
         }
-        meta_file = os.path.join(output_dir, 'chapters', f'chapter_{chapter_num:03d}_meta.json')
+        meta_file = os.path.join(self.paths['chapters_dir'], f'chapter_{chapter_num:03d}_meta.json')
         save_json(metadata, meta_file)
         
         self.logger.info(f"Saved chapter {chapter_num} to {text_file}")
     
     def _load_chapter(self, chapter_num: int) -> str:
         """Load chapter content from file."""
-        output_dir = self.config['paths']['output_dir']
-        text_file = os.path.join(output_dir, 'chapters', f'chapter_{chapter_num:03d}.txt')
+        text_file = os.path.join(self.paths['chapters_dir'], f'chapter_{chapter_num:03d}.txt')
         return load_text(text_file)
     
     def get_chapter_end(self, chapter_num: int, chars: int = None) -> str:

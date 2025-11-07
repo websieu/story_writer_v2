@@ -9,11 +9,12 @@ from src.utils import save_json, load_json
 class OutlineGenerator:
     """Generate chapter outlines for story batches."""
     
-    def __init__(self, llm_client, checkpoint_manager, logger, config):
+    def __init__(self, llm_client, checkpoint_manager, logger, config, paths):
         self.llm_client = llm_client
         self.checkpoint = checkpoint_manager
         self.logger = logger
         self.config = config
+        self.paths = paths
         self.chapters_per_batch = config['story']['chapters_per_batch']
     
     def generate_initial_outline(self, motif: Dict[str, Any], batch_num: int = 1) -> List[Dict[str, Any]]:
@@ -37,11 +38,12 @@ class OutlineGenerator:
         system_message = """Bạn là một tác giả truyện tu tiên chuyên nghiệp, có khả năng tạo ra các cốt truyện hấp dẫn, 
         phức tạp với các tình tiết đan xen khéo léo. Nhiệm vụ của bạn là tạo outline chi tiết cho 5 chương đầu tiên."""
         
-        # Call LLM
+        # Call LLM with batch_id
         result = self.llm_client.call(
             prompt=prompt,
             task_name=step_name,
-            system_message=system_message
+            system_message=system_message,
+            batch_id=batch_num
         )
         
         # Parse outline from response
@@ -89,11 +91,12 @@ class OutlineGenerator:
         system_message = """Bạn là một tác giả truyện tu tiên chuyên nghiệp. Nhiệm vụ của bạn là tiếp tục phát triển 
         cốt truyện một cách hợp lý, giải quyết các mâu thuẫn hiện có đồng thời mở ra hướng phát triển mới."""
         
-        # Call LLM
+        # Call LLM with batch_id
         result = self.llm_client.call(
             prompt=prompt,
             task_name=step_name,
-            system_message=system_message
+            system_message=system_message,
+            batch_id=batch_num
         )
         
         # Parse outline from response
@@ -336,14 +339,12 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
     
     def _save_outline(self, outlines: List[Dict[str, Any]], batch_num: int):
         """Save outline to file."""
-        output_dir = self.config['paths']['output_dir']
-        file_path = os.path.join(output_dir, 'outlines', f'batch_{batch_num}_outline.json')
+        file_path = os.path.join(self.paths['outlines_dir'], f'batch_{batch_num}_outline.json')
         save_json({'batch': batch_num, 'chapters': outlines}, file_path)
         self.logger.info(f"Saved outline for batch {batch_num} to {file_path}")
     
     def _load_outline(self, batch_num: int) -> List[Dict[str, Any]]:
         """Load outline from file."""
-        output_dir = self.config['paths']['output_dir']
-        file_path = os.path.join(output_dir, 'outlines', f'batch_{batch_num}_outline.json')
+        file_path = os.path.join(self.paths['outlines_dir'], f'batch_{batch_num}_outline.json')
         data = load_json(file_path)
         return data.get('chapters', [])

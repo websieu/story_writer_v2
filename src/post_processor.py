@@ -9,14 +9,15 @@ from src.utils import save_json, load_json
 class PostChapterProcessor:
     """Handle all post-chapter processing tasks."""
     
-    def __init__(self, llm_client, checkpoint_manager, logger, config):
+    def __init__(self, llm_client, checkpoint_manager, logger, config, paths):
         self.llm_client = llm_client
         self.checkpoint = checkpoint_manager
         self.logger = logger
         self.config = config
-        self.events_file = os.path.join(config['paths']['output_dir'], 'events', 'events.json')
-        self.conflicts_file = os.path.join(config['paths']['output_dir'], 'conflicts', 'conflicts.json')
-        self.summaries_file = os.path.join(config['paths']['output_dir'], 'summaries', 'summaries.json')
+        self.paths = paths
+        self.events_file = os.path.join(paths['events_dir'], 'events.json')
+        self.conflicts_file = os.path.join(paths['conflicts_dir'], 'conflicts.json')
+        self.summaries_file = os.path.join(paths['summaries_dir'], 'summaries.json')
         
         # Load existing data
         self.events = self._load_events()
@@ -97,7 +98,8 @@ Hãy trích xuất theo định dạng JSON trên."""
         result = self.llm_client.call(
             prompt=prompt,
             task_name="event_extraction",
-            system_message="Bạn là chuyên gia phân tích cốt truyện, chỉ trích xuất những sự kiện thực sự quan trọng."
+            system_message="Bạn là chuyên gia phân tích cốt truyện, chỉ trích xuất những sự kiện thực sự quan trọng.",
+            chapter_id=chapter_num
         )
         
         # Parse events
@@ -179,7 +181,8 @@ Hãy trích xuất theo định dạng JSON trên."""
         result = self.llm_client.call(
             prompt=prompt,
             task_name="conflict_extraction",
-            system_message="Bạn là chuyên gia phân tích mâu thuẫn trong văn học."
+            system_message="Bạn là chuyên gia phân tích mâu thuẫn trong văn học.",
+            chapter_id=chapter_num
         )
         
         # Parse conflicts
@@ -223,7 +226,8 @@ Hãy viết tóm tắt."""
         result = self.llm_client.call(
             prompt=prompt,
             task_name="summary_generation",
-            system_message="Bạn là chuyên gia tóm tắt nội dung."
+            system_message="Bạn là chuyên gia tóm tắt nội dung.",
+            chapter_id=chapter_num
         )
         
         summary = result['response'].strip()
@@ -279,7 +283,8 @@ Hãy viết tóm tắt siêu ngắn gọn."""
         result = self.llm_client.call(
             prompt=prompt,
             task_name="summary_generation",
-            system_message="Bạn là chuyên gia tóm tắt, có khả năng nắm bắt cốt lõi."
+            system_message="Bạn là chuyên gia tóm tắt, có khả năng nắm bắt cốt lõi.",
+            chapter_id=chapter_num
         )
         
         super_summary = result['response'].strip()

@@ -5,7 +5,8 @@ import os
 import sys
 from typing import Dict, Any, List, Optional
 
-from src.utils import load_config, ensure_directories, Logger, CostTracker
+from src.utils import (load_config, get_project_paths, ensure_project_directories, 
+                       Logger, CostTracker)
 from src.checkpoint import CheckpointManager
 from src.llm_client import LLMClient
 from src.motif_loader import MotifLoader
@@ -18,21 +19,30 @@ from src.post_processor import PostChapterProcessor
 class StoryGenerator:
     """Main orchestrator for the story generation system."""
     
-    def __init__(self, config_path: str = "config/config.yaml", story_id: str = "story_001"):
-        """Initialize the story generator."""
-        # Ensure directories exist
-        ensure_directories()
+    def __init__(self, config_path: str = "config/config.yaml", project_id: str = "story_001"):
+        """
+        Initialize the story generator.
         
+        Args:
+            config_path: Path to configuration file
+            project_id: Unique project identifier (all data stored in projects/{project_id}/)
+        """
         # Load configuration
         self.config = load_config(config_path)
-        self.story_id = story_id
+        self.project_id = project_id
+        
+        # Ensure project directories exist
+        ensure_project_directories(project_id, self.config)
+        
+        # Get project-specific paths
+        self.paths = get_project_paths(project_id, self.config)
         
         # Initialize core components
-        self.logger = Logger("StoryGenerator", self.config)
+        self.logger = Logger("StoryGenerator", project_id, self.config)
         self.cost_tracker = CostTracker(self.config)
         self.checkpoint = CheckpointManager(
-            self.config['paths']['checkpoint_dir'],
-            story_id
+            self.paths['checkpoints_dir'],
+            project_id
         )
         
         # Initialize LLM client
@@ -47,29 +57,34 @@ class StoryGenerator:
             self.llm_client,
             self.checkpoint,
             self.logger,
-            self.config
+            self.config,
+            self.paths
         )
         self.entity_manager = EntityManager(
             self.llm_client,
             self.checkpoint,
             self.logger,
-            self.config
+            self.config,
+            self.paths
         )
         self.chapter_writer = ChapterWriter(
             self.llm_client,
             self.checkpoint,
             self.logger,
             self.config,
-            self.entity_manager
+            self.entity_manager,
+            self.paths
         )
         self.post_processor = PostChapterProcessor(
             self.llm_client,
             self.checkpoint,
             self.logger,
-            self.config
+            self.config,
+            self.paths
         )
         
-        self.logger.info(f"StoryGenerator initialized for story: {story_id}")
+        self.logger.info(f"StoryGenerator initialized for project: {project_id}")
+        self.logger.info(f"Project root: {self.paths['project_root']}")
     
     def generate_story(self, num_batches: int = 1, motif_id: Optional[str] = None,
                        genre: Optional[str] = None):
@@ -306,10 +321,8 @@ class StoryGenerator:
     
     def _save_final_summary(self):
         """Save final cost and progress summary."""
-        output_dir = self.config['paths']['output_dir']
-        
         # Save cost summary
-        cost_file = os.path.join(output_dir, 'cost_summary.json')
+        cost_file = os.path.join(self.paths['outputs_dir'], 'cost_summary.json')
         self.cost_tracker.save_summary(cost_file)
         
         # Log final stats
@@ -324,7 +337,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Generate a story using AI")
-    parser.add_argument('--story-id', default='story_001', help='Story identifier')
+    parser.add_argument('--project-id', '--story-id', dest='project_id', 
+                       default='story_001', help='Project identifier (all data stored in projects/{project_id}/)')
     parser.add_argument('--batches', type=int, default=1, help='Number of batches to generate')
     parser.add_argument('--motif-id', help='Specific motif ID to use')
     parser.add_argument('--genre', help='Genre filter for motif selection')
@@ -335,7 +349,7 @@ def main():
     try:
         generator = StoryGenerator(
             config_path=args.config,
-            story_id=args.story_id
+            project_id=args.project_id
         )
         
         generator.generate_story(

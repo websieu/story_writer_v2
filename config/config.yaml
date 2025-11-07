@@ -61,12 +61,22 @@ story:
   last_chapter_context_chars: 1000
 
 # File Paths
+# All project data will be stored in projects/{project_id}/
 paths:
-  data_dir: "data"
-  output_dir: "output"
-  checkpoint_dir: "checkpoints"
-  logs_dir: "logs"
-  motif_file: "data/motif.json"
+  projects_base_dir: "projects"  # Base directory for all projects
+  motif_file: "data/motif.json"  # Shared motif file
+  # Project-specific paths (will be constructed as projects/{project_id}/{subdir})
+  project_subdirs:
+    logs: "logs"
+    checkpoints: "checkpoints"
+    outputs: "outputs"
+    chapters: "outputs/chapters"
+    outlines: "outputs/outlines"
+    entities: "outputs/entities"
+    events: "outputs/events"
+    conflicts: "outputs/conflicts"
+    summaries: "outputs/summaries"
+    llm_logs: "logs/llm_requests"  # Detailed LLM request/response logs
   
 # Logging Configuration
 logging:

@@ -9,12 +9,13 @@ from src.utils import save_json, load_json
 class EntityManager:
     """Extract and manage story entities (characters, locations, items, etc.)."""
     
-    def __init__(self, llm_client, checkpoint_manager, logger, config):
+    def __init__(self, llm_client, checkpoint_manager, logger, config, paths):
         self.llm_client = llm_client
         self.checkpoint = checkpoint_manager
         self.logger = logger
         self.config = config
-        self.entity_file = os.path.join(config['paths']['output_dir'], 'entities', 'entities.json')
+        self.paths = paths
+        self.entity_file = os.path.join(paths['entities_dir'], 'entities.json')
         self.entities = self._load_entities()
     
     def _load_entities(self) -> Dict[str, List[Dict[str, Any]]]:
@@ -53,11 +54,12 @@ class EntityManager:
         system_message = """Bạn là một chuyên gia phân tích văn bản, có khả năng trích xuất và phân loại các entity 
         từ outline truyện. Hãy trích xuất chi tiết và đầy đủ nhất."""
         
-        # Call LLM
+        # Call LLM with batch_id
         result = self.llm_client.call(
             prompt=prompt,
             task_name="entity_extraction",
-            system_message=system_message
+            system_message=system_message,
+            batch_id=batch_num
         )
         
         # Parse entities
@@ -98,11 +100,12 @@ class EntityManager:
         system_message = """Bạn là chuyên gia phân tích, hãy trích xuất các entity mới xuất hiện trong chương này 
         mà chưa có trong danh sách entity hiện tại."""
         
-        # Call LLM
+        # Call LLM with chapter_id
         result = self.llm_client.call(
             prompt=prompt,
             task_name="entity_extraction",
-            system_message=system_message
+            system_message=system_message,
+            chapter_id=chapter_num
         )
         
         # Parse new entities

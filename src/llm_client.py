@@ -23,7 +23,10 @@ class LLMClient:
     
     def call(self, prompt: str, task_name: str = "default", 
              system_message: Optional[str] = None, 
-             return_json: bool = False, **kwargs) -> Dict[str, Any]:
+             return_json: bool = False, 
+             batch_id: Optional[int] = None,
+             chapter_id: Optional[int] = None,
+             **kwargs) -> Dict[str, Any]:
         """
         Call LLM API with automatic logging.
         
@@ -32,6 +35,8 @@ class LLMClient:
             task_name: Task name to get specific configuration
             system_message: Optional system message
             return_json: If True, parse response as JSON
+            batch_id: Current batch number (for logging)
+            chapter_id: Current chapter number (for logging)
             **kwargs: Additional parameters to override config
             
         Returns:
@@ -49,10 +54,13 @@ class LLMClient:
         # System message
         sys_msg = system_message or ""
         
-        # Call API
+        # Call API with exception handling
         start_time = time.time()
+        response_text = None
+        error = None
+        
         try:
-            self.logger.info(f"Calling Gemini API: model={model}, task={task_name}")
+            self.logger.info(f"Calling Gemini API: model={model}, task={task_name}, batch={batch_id}, chapter={chapter_id}")
             
             if return_json:
                 # Không cần truyền keys, sẽ tự động load từ config
@@ -95,7 +103,7 @@ class LLMClient:
                 duration=duration
             )
             
-            # Log the call
+            # Log to main log
             self.logger.log_llm_call(
                 step=task_name,
                 prompt=prompt,
@@ -107,6 +115,25 @@ class LLMClient:
                 },
                 cost=cost,
                 duration=duration
+            )
+            
+            # Log detailed request to separate file
+            self.logger.log_llm_request(
+                task_name=task_name,
+                system_prompt=sys_msg,
+                user_prompt=prompt,
+                response=response_text,
+                error=None,
+                batch_id=batch_id,
+                chapter_id=chapter_id,
+                tokens={
+                    'input': input_tokens,
+                    'output': output_tokens,
+                    'total': total_tokens
+                },
+                cost=cost,
+                duration=duration,
+                model=model
             )
             
             return {
@@ -122,7 +149,23 @@ class LLMClient:
             }
             
         except Exception as e:
-            self.logger.error(f"LLM API call failed: {str(e)}")
+            duration = time.time() - start_time
+            error = str(e)
+            
+            # Log error to main log
+            self.logger.error(f"LLM API call failed: {error}")
+            
+            # Log error to separate file with prompts
+            self.logger.log_llm_error(
+                task_name=task_name,
+                system_prompt=sys_msg,
+                user_prompt=prompt,
+                error=error,
+                batch_id=batch_id,
+                chapter_id=chapter_id,
+                model=model
+            )
+            
             raise
     
     def _estimate_tokens(self, text: str) -> int:

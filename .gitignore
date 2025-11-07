@@ -25,7 +25,7 @@ auth_files/disable_log.json
 output/
 logs/
 checkpoints/
-
+projects/
 # OS
 .DS_Store
 Thumbs.db

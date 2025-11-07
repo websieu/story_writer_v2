@@ -2,6 +2,66 @@
 
 All notable changes to the AI Story Generation System will be documented in this file.
 
+## [1.3.0] - 2025-11-07
+
+### 🏗️ Major Refactoring - Project-Based Structure & Detailed Logging
+
+**Breaking Changes:**
+- All project data now stored in `projects/{project_id}/` structure
+- Modules now require `paths` parameter in `__init__()`
+- Logger requires `project_id` parameter
+- Config `paths` structure completely changed
+
+**New Features:**
+- ✨ **Project-based folder structure**: Each project has isolated directory
+- ✨ **Detailed LLM request logging**: Every API call logged to separate JSON file
+- ✨ **Exception logging**: Failed requests saved with full prompts
+- ✨ **Batch/Chapter context**: All LLM calls tagged with batch_id/chapter_id
+- ✨ **Complete audit trail**: Full prompts, responses, errors, metrics per request
+
+**File Organization:**
+```
+projects/{project_id}/
+  outputs/          # All output files
+    chapters/
+    outlines/
+    entities/
+    events/
+    conflicts/
+    summaries/
+  checkpoints/      # Checkpoint files
+  logs/             # Project logs
+    llm_requests/   # Individual LLM request logs (NEW)
+```
+
+**LLM Request Logging:**
+- File naming: `{task}_batch{N}_chapter{M}_{timestamp}.json`
+- Contains: system prompt, user prompt, response, error, metrics
+- Organized by task/batch/chapter for easy analysis
+
+**Core Changes:**
+- `src/utils.py`: New `get_project_paths()`, `ensure_project_directories()`
+- `src/utils.py`: Logger adds `log_llm_request()`, `log_llm_error()`
+- `src/llm_client.py`: Added `batch_id`, `chapter_id` parameters to `call()`
+- `main.py`: Changed from `story_id` to `project_id`
+- All modules: Added `paths` parameter, updated file operations
+- `config.yaml`: New `paths` structure with `projects_base_dir`
+
+**CLI Changes:**
+- New: `--project-id` (preferred)
+- Backward compatible: `--story-id` (aliased to `--project-id`)
+
+**Documentation:**
+- `PROJECT_STRUCTURE_UPDATE.md` - Comprehensive refactoring guide
+- `UPDATE_MODULES.md` - Module-by-module changes
+
+**Benefits:**
+- Complete isolation between projects
+- Full debugging capability with request logs
+- Better cost analysis per task/batch/chapter
+- Easier error diagnosis
+- Audit trail for all LLM interactions
+
 ## [1.2.0] - 2025-11-07
 
 ### 🔄 Refactoring - Random Key Selection
