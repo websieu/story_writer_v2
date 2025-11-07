@@ -1,0 +1,37 @@
+{
+  "_comment": "Example motif file for story generation",
+  "motifs": [
+    {
+      "id": "motif_001",
+      "title": "Tu Tiên - Thiên Tài Bị Phế",
+      "description": "Thiên tài tu tiên bị hại mất tu vi, phải bắt đầu lại từ đầu với ý chí kiên cường",
+      "genre": "tu tiên",
+      "themes": ["phục hận", "tái sinh", "vượt khó"],
+      "keywords": ["thiên tài", "phế vật", "tu luyện", "phục hận", "dược đạo"]
+    },
+    {
+      "id": "motif_002",
+      "title": "Tu Tiên - Xuyên Không Với Hệ Thống",
+      "description": "Nhân vật chính xuyên không đến thế giới tu tiên với hệ thống hỗ trợ mạnh mẽ",
+      "genre": "tu tiên",
+      "themes": ["xuyên không", "hệ thống", "phát triển"],
+      "keywords": ["xuyên không", "hệ thống", "kim chỉ", "thăng cấp", "đảo lộn"]
+    },
+    {
+      "id": "motif_003",
+      "title": "Tu Tiên - Nhặt Được Bảo Vật Cổ Đại",
+      "description": "Nhân vật nhặt được bảo vật cổ đại chứa đựng sức mạnh và kiến thức của tiền bối",
+      "genre": "tu tiên",
+      "themes": ["cơ duyên", "sư phụ ẩn mật", "truyền thừa"],
+      "keywords": ["bảo vật", "truyền thừa", "sư phụ", "cổ đại", "bí mật"]
+    },
+    {
+      "id": "motif_004",
+      "title": "Tu Tiên - Làng Chài Khởi Nghiệp",
+      "description": "Xuất thân từ làng chài nghèo khó, nhân vật phải vượt qua mọi khó khăn để bước vào con đường tu tiên",
+      "genre": "tu tiên",
+      "themes": ["khởi nghiệp", "vượt giai cấp", "nỗ lực"],
+      "keywords": ["xuất thân thấp", "phấn đấu", "nghị lực", "gia tộc", "tông môn"]
+    }
+  ]
+}

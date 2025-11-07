@@ -1,0 +1,40 @@
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env
+
+# API Keys & Auth (IMPORTANT!)
+auth_files/keys.txt
+auth_files/disable_log.json
+
+# Output files (comment out if you want to track output)
+output/
+logs/
+checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Backup files
+*.bak
+*.backup

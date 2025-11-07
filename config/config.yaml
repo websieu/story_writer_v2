@@ -1,0 +1,105 @@
+# Main Configuration File for Story Generation System
+
+# Default LLM # Cost Tracking (USD per 1M tokens)
+cost_tracking:
+  enabled: true
+  pricing:
+    gemini-2.5-pro:
+      input: 1.25
+      output: 5.00
+    gemini-2.5-flash:
+      input: 0.075
+      output: 0.30
+    gemini-2.5-flash-lite:
+      input: 0.0375
+      output: 0.15
+    gemma-3-27b-it:
+      input: 0.0
+      output: 0.0
+  provider: "gemini"  # gemini
+  model: "gemini-2.5-flash"
+  temperature: 0.7
+  max_tokens: 4000
+  keys_file: "auth_files/keys.txt"  # Path to Gemini API keys file
+
+# Task-specific LLM configurations
+task_configs:
+  outline_generation:
+    model: "gemini-2.5-flash"
+    temperature: 0.8
+    max_tokens: 4000
+    
+  entity_extraction:
+    model: "gemini-2.5-flash"
+    temperature: 0.3
+    max_tokens: 3000
+    
+  chapter_writing:
+    model: "gemini-2.5-pro"  # Dùng Pro cho viết chapter
+    temperature: 0.85
+    max_tokens: 8000
+    
+  event_extraction:
+    model: "gemini-2.5-flash"
+    temperature: 0.3
+    max_tokens: 2000
+    
+  conflict_extraction:
+    model: "gemini-2.5-flash"
+    temperature: 0.3
+    max_tokens: 2000
+    
+  summary_generation:
+    model: "gemini-2.5-flash"
+    temperature: 0.5
+    max_tokens: 1500
+
+# Story Configuration
+story:
+  chapters_per_batch: 5
+  target_words_per_chapter: 5000
+  last_chapter_context_chars: 1000
+
+# File Paths
+paths:
+  data_dir: "data"
+  output_dir: "output"
+  checkpoint_dir: "checkpoints"
+  logs_dir: "logs"
+  motif_file: "data/motif.json"
+  
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_prompts: true
+  log_responses: true
+  log_tokens: true
+  log_cost: true
+
+# Checkpoint Configuration
+checkpoint:
+  enabled: true
+  auto_save: true
+  
+# Cost Tracking (USD per 1K tokens)
+cost_tracking:
+  enabled: true
+  pricing:
+    gpt-4:
+      input: 0.03
+      output: 0.06
+    gpt-4-turbo:
+      input: 0.01
+      output: 0.03
+    gpt-3.5-turbo:
+      input: 0.0005
+      output: 0.0015
+
+# Conflict Timeline Categories (in chapters)
+conflict_timelines:
+  immediate: 1
+  batch: 5
+  short_term: 10
+  medium_term: 30
+  long_term: 100
+  epic: 300
