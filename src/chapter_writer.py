@@ -242,14 +242,19 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
     
     def _get_entities_from_outline(self, outline_entities: List[Dict[str, Any]], chapter_num: int) -> List[Dict[str, Any]]:
         """
-        Get full entity details from entity names in outline, filtered by chapter number.
-        
+        Get full entity details from entity names in outline.
+
         Args:
             outline_entities: List of entity references from the outline
-            chapter_num: Current chapter number to filter entities
-            
+            chapter_num: Current chapter number (for context)
+
         Returns:
-            List of entities that appear in this specific chapter
+            List of entities with full details from entity manager
+
+        Note:
+            Entities in outline_entities are already filtered by the LLM during outline generation.
+            No need to filter again by appear_in_chapters since being in the outline
+            already indicates relevance to this chapter.
         """
         full_entities = []
         for outline_entity in outline_entities:
@@ -258,9 +263,8 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
                 # Try to find full entity details from entity manager
                 entity = self.entity_manager.get_entity_by_name(entity_name)
                 if entity:
-                    # Only include if entity appears in this chapter
-                    if chapter_num in entity.get('appear_in_chapters', []):
-                        full_entities.append(entity)
+                    # Use full entity details from entity manager
+                    full_entities.append(entity)
                 else:
                     # If not found in entity manager, use the outline entity info as fallback
                     full_entities.append(outline_entity)
