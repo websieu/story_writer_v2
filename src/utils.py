@@ -5,10 +5,62 @@ import os
 import json
 import yaml
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 import time
+
+
+def parse_json_from_response(response: str) -> Any:
+    """
+    Parse JSON from LLM response, handling markdown code blocks.
+    
+    Supports:
+    - Plain JSON: {...} or [...]
+    - Markdown wrapped: ```json\n{...}\n```
+    - Both objects and arrays
+    
+    Args:
+        response: Raw response from LLM
+        
+    Returns:
+        Parsed JSON (dict or list)
+        
+    Raises:
+        json.JSONDecodeError: If JSON cannot be parsed
+    """
+    if not response or not response.strip():
+        raise ValueError("Empty response")
+    
+    response = response.strip()
+    
+    # Try to extract from markdown code block first
+    json_fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response, re.IGNORECASE)
+    if json_fence_match:
+        json_str = json_fence_match.group(1).strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+    
+    # Try direct JSON parse
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        pass
+    
+    # Try to find JSON object {...}
+    obj_match = re.search(r'\{[\s\S]*\}\s*$', response)
+    if obj_match:
+        return json.loads(obj_match.group(0))
+    
+    # Try to find JSON array [...]
+    arr_match = re.search(r'\[[\s\S]*\]\s*$', response)
+    if arr_match:
+        return json.loads(arr_match.group(0))
+    
+    raise json.JSONDecodeError(f"Could not extract JSON from response", response, 0)
 
 
 def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:

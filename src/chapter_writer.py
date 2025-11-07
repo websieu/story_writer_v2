@@ -3,6 +3,7 @@ Step 5: Chapter content writer
 """
 import os
 from typing import Dict, Any, List, Optional
+from src.prompts.generate_prompt import WRITING_SYSTEM_PROMPT
 from src.utils import save_text, load_text, save_json, load_json
 
 
@@ -50,9 +51,7 @@ class ChapterWriter:
         # Create writing prompt
         prompt = self._create_writing_prompt(chapter_outline, context)
         
-        system_message = f"""Bạn là một tác giả truyện tu tiên tài năng, có khả năng viết những đoạn văn sinh động, 
-        hấp dẫn với các mô tả chi tiết và đối thoại tự nhiên. Hãy viết chương truyện khoảng {self.target_words} từ."""
-        
+        system_message = WRITING_SYSTEM_PROMPT
         # Call LLM with chapter_id
         result = self.llm_client.call(
             prompt=prompt,
@@ -126,34 +125,7 @@ Mâu thuẫn:
 
 ---
 
-**YÊU CẦU VIẾT:**
-
-1. **Độ dài:** Khoảng {self.target_words} từ
-
-2. **Cấu trúc:**
-   - Mở đầu: Nối tiếp tự nhiên từ chương trước (nếu có)
-   - Phát triển: Triển khai các sự kiện chính theo outline
-   - Cao trào: Tạo điểm nhấn, kịch tính
-   - Kết thúc: Để lại hồi hộp cho chương sau
-
-3. **Nội dung:**
-   - Mô tả chi tiết bối cảnh, hành động, cảm xúc
-   - Đối thoại tự nhiên, phù hợp tính cách nhân vật
-   - Thể hiện rõ mục đích, động cơ của nhân vật chính
-   - Cài cắm các chi tiết foreshadowing theo outline
-   - Sử dụng các entity đã cho một cách hợp lý
-
-4. **Phong cách:**
-   - Ngôn ngữ phong phú, không lặp từ
-   - Nhịp độ phù hợp: chậm khi mô tả, nhanh khi hành động
-   - Cân bằng giữa tường thuật, mô tả, và đối thoại
-
-5. **Lưu ý:**
-   - Giữ tính nhất quán với các chương trước
-   - Phát triển nhân vật một cách tự nhiên
-   - Không giải quyết mọi mâu thuẫn trong một chương
-
-Hãy viết nội dung chương truyện hoàn chỉnh."""
+"""
         
         return prompt
     

@@ -3,7 +3,7 @@ Post-chapter processing: Extract events, conflicts, summaries, etc.
 """
 import os
 from typing import Dict, Any, List, Optional
-from src.utils import save_json, load_json
+from src.utils import save_json, load_json, parse_json_from_response
 
 
 class PostChapterProcessor:
@@ -349,45 +349,30 @@ Hãy viết tóm tắt siêu ngắn gọn."""
     
     def _parse_events_response(self, response: str, chapter_num: int) -> List[Dict[str, Any]]:
         """Parse events from LLM response."""
-        import json
-        import re
-        
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
-        else:
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            json_str = json_match.group(0) if json_match else '{}'
-        
         try:
-            data = json.loads(json_str)
-            events = data.get('events', [])
+            data = parse_json_from_response(response)
+            # Handle both direct list and object with 'events' key
+            if isinstance(data, list):
+                events = data
+            else:
+                events = data.get('events', [])
             # Add chapter info to each event
             for event in events:
                 event['chapter'] = chapter_num
             return events
-        except:
-            self.logger.warning(f"Failed to parse events for chapter {chapter_num}")
+        except Exception as e:
+            self.logger.warning(f"Failed to parse events for chapter {chapter_num}: {str(e)}")
+            self.logger.warning(f"Response preview: {response[:500]}")
             return []
     
     def _parse_conflicts_response(self, response: str, chapter_num: int):
         """Parse conflicts from LLM response."""
-        import json
-        import re
-        
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
-        else:
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            json_str = json_match.group(0) if json_match else '{}'
-        
         try:
-            data = json.loads(json_str)
+            data = parse_json_from_response(response)
             new_conflicts = data.get('new_conflicts', [])
             updated_conflicts = data.get('updated_conflicts', [])
             return new_conflicts, updated_conflicts
-        except:
+        except Exception as e:
             self.logger.warning(f"Failed to parse conflicts for chapter {chapter_num}")
             return [], []
     

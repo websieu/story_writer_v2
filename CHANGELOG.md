@@ -2,7 +2,35 @@
 
 All notable changes to the AI Story Generation System will be documented in this file.
 
-## [1.3.0] - 2025-11-07
+## [1.3.1] - 2024-11-07
+
+### 🐛 Bug Fix - JSON Parsing
+
+**Fixed:**
+- ✅ **JSON parsing error**: Fixed parsing of Gemini responses wrapped in markdown code blocks
+- ✅ **Array support**: Added support for JSON arrays (not just objects)
+- ✅ **Type mapping**: Fixed entity type mapping (artifact→items, elixir→spiritual_herbs)
+
+**Root Cause:**
+- Gemini API returns JSON wrapped in ` ```json\n...\n``` ` markdown code blocks
+- Old parsers only looked for plain JSON objects `{...}`
+- Entity extraction returns arrays `[...]`, not objects
+
+**Solution:**
+- Added universal `parse_json_from_response()` utility function in `src/utils.py`
+- Updated all JSON parsers to use new utility
+- Added proper type mapping in entity_manager.py
+
+**Files Changed:**
+- `src/utils.py` - Added `parse_json_from_response()`
+- `src/entity_manager.py` - Updated parser with type mapping
+- `src/outline_generator.py` - Updated parser
+- `src/post_processor.py` - Updated parsers
+
+**Documentation:**
+- Added `JSON_PARSING_FIX.md` with detailed analysis
+
+## [1.3.0] - 2024-11-07
 
 ### 🏗️ Major Refactoring - Project-Based Structure & Detailed Logging
 

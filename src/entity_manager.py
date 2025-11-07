@@ -3,7 +3,8 @@ Step 3-4: Entity extraction and management
 """
 import os
 from typing import Dict, Any, List, Optional
-from src.utils import save_json, load_json
+from src.prompts.extract_prompt import SYSTEM_ENTITY_EXTRACTOR, SYSTEM_ENTITY_EXTRACTOR_OUTLINE
+from src.utils import save_json, load_json, parse_json_from_response
 
 
 class EntityManager:
@@ -51,9 +52,7 @@ class EntityManager:
         # Create prompt
         prompt = self._create_extraction_prompt(outlines)
         
-        system_message = """Bạn là một chuyên gia phân tích văn bản, có khả năng trích xuất và phân loại các entity 
-        từ outline truyện. Hãy trích xuất chi tiết và đầy đủ nhất."""
-        
+        system_message = SYSTEM_ENTITY_EXTRACTOR_OUTLINE
         # Call LLM with batch_id
         result = self.llm_client.call(
             prompt=prompt,
@@ -97,8 +96,7 @@ class EntityManager:
         # Create prompt
         prompt = self._create_chapter_extraction_prompt(chapter_content, chapter_num)
         
-        system_message = """Bạn là chuyên gia phân tích, hãy trích xuất các entity mới xuất hiện trong chương này 
-        mà chưa có trong danh sách entity hiện tại."""
+        system_message =  SYSTEM_ENTITY_EXTRACTOR
         
         # Call LLM with chapter_id
         result = self.llm_client.call(
@@ -170,116 +168,13 @@ class EntityManager:
 
 {outline_text}
 
-**YÊU CẦU:**
-
-Trích xuất và phân loại các entity theo các nhóm sau:
-
-1. **Nhân vật (characters)**: Tất cả nhân vật xuất hiện
-   - Tên, mô tả ngoại hình, tính cách, năng lực, cảnh giới tu luyện, mục tiêu
-   
-2. **Địa điểm (locations)**: Các địa điểm, thành phố, tông môn, hang động, v.v.
-   - Tên, mô tả chi tiết, đặc điểm nổi bật
-   
-3. **Vật phẩm (items)**: Vũ khí, bảo bối, pháp bảo
-   - Tên, loại, năng lực, nguồn gốc
-   
-4. **Linh dược (spiritual_herbs)**: Dược thảo, linh đan
-   - Tên, công dụng, độ hiếm
-   
-5. **Yêu thú (beasts)**: Quái thú, linh thú
-   - Tên, loại, năng lực, cảnh giới
-   
-6. **Công pháp (techniques)**: Võ công, phép thuật, kỹ năng
-   - Tên, loại, mức độ, hiệu quả
-   
-7. **Thế lực (factions)**: Tông môn, gia tộc, bang hội
-   - Tên, quy mô, ảnh hưởng, lãnh đạo
-
-**ĐỊNH DẠNG OUTPUT (JSON):**
-
-```json
-{{
-  "characters": [
-    {{
-      "name": "Tên nhân vật",
-      "description": "Mô tả tổng quan",
-      "appearance": "Ngoại hình",
-      "personality": "Tính cách",
-      "cultivation_level": "Cảnh giới tu luyện",
-      "abilities": ["Năng lực 1", "Năng lực 2"],
-      "background": "Lai lịch",
-      "goals": "Mục tiêu",
-      "relationships": [{{"character": "Tên nhân vật khác", "relation": "Quan hệ"}}]
-    }}
-  ],
-  "locations": [
-    {{
-      "name": "Tên địa điểm",
-      "type": "thành phố/tông môn/hang động/etc",
-      "description": "Mô tả chi tiết",
-      "features": ["Đặc điểm 1", "Đặc điểm 2"]
-    }}
-  ],
-  "items": [
-    {{
-      "name": "Tên vật phẩm",
-      "type": "vũ khí/pháp bảo/etc",
-      "description": "Mô tả",
-      "abilities": ["Năng lực"],
-      "grade": "Phẩm cấp",
-      "owner": "Chủ nhân hiện tại"
-    }}
-  ],
-  "spiritual_herbs": [
-    {{
-      "name": "Tên linh dược",
-      "type": "linh thảo/linh đan/etc",
-      "description": "Mô tả",
-      "effects": ["Công dụng"],
-      "rarity": "Độ hiếm"
-    }}
-  ],
-  "beasts": [
-    {{
-      "name": "Tên yêu thú",
-      "type": "Loại",
-      "description": "Mô tả",
-      "cultivation_level": "Cảnh giới",
-      "abilities": ["Năng lực"]
-    }}
-  ],
-  "techniques": [
-    {{
-      "name": "Tên công pháp",
-      "type": "võ công/phép thuật/etc",
-      "description": "Mô tả",
-      "grade": "Cấp độ",
-      "effects": ["Hiệu quả"],
-      "requirements": "Yêu cầu tu luyện"
-    }}
-  ],
-  "factions": [
-    {{
-      "name": "Tên thế lực",
-      "type": "tông môn/gia tộc/bang hội/etc",
-      "description": "Mô tả",
-      "leader": "Lãnh đạo",
-      "members": ["Thành viên nổi bật"],
-      "influence": "Mức độ ảnh hưởng",
-      "territory": "Lãnh địa"
-    }}
-  ]
-}}
-```
-
-Hãy trích xuất theo đúng định dạng JSON trên."""
-        
+"""
         return prompt
     
     def _create_chapter_extraction_prompt(self, chapter_content: str, chapter_num: int) -> str:
         """Create prompt for extracting new entities from chapter content."""
         # Truncate content if too long
-        max_chars = 10000
+        max_chars = 30000
         truncated_content = chapter_content[:max_chars] + "..." if len(chapter_content) > max_chars else chapter_content
         
         # Get existing entity names for reference
@@ -293,37 +188,50 @@ Hãy trích xuất theo đúng định dạng JSON trên."""
 **ENTITY ĐÃ CÓ (không cần trích xuất lại):**
 {', '.join(existing_names[:100])}
 
-**YÊU CẦU:**
-- Chỉ trích xuất entity MỚI, không có trong danh sách đã có
-- Mô tả chi tiết cho mỗi entity mới
-- Phân loại đúng category
-
-**ĐỊNH DẠNG OUTPUT:** Giống như prompt trích xuất từ outline, trả về JSON với các category."""
+"""
         
         return prompt
     
     def _parse_entity_response(self, response: str) -> Dict[str, List[Dict[str, Any]]]:
         """Parse entity extraction response."""
-        import json
-        import re
-        
-        # Extract JSON
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
-        else:
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
-            else:
-                self.logger.warning("Could not extract JSON from entity response")
-                return {}
-        
         try:
-            entities = json.loads(json_str)
+            entities = parse_json_from_response(response)
+            # If response is a list, convert to dict format
+            if isinstance(entities, list):
+                # Group entities by type
+                # Map from prompt types to storage keys
+                type_mapping = {
+                    'character': 'characters',
+                    'beast': 'beasts',
+                    'faction': 'factions',
+                    'artifact': 'items',  # artifacts stored as items
+                    'location': 'locations',
+                    'technique': 'techniques',
+                    'elixir': 'spiritual_herbs',  # elixirs stored as spiritual_herbs
+                    'other': 'other'
+                }
+                
+                categorized = {
+                    'characters': [],
+                    'locations': [],
+                    'items': [],
+                    'spiritual_herbs': [],
+                    'beasts': [],
+                    'techniques': [],
+                    'factions': [],
+                    'other': []
+                }
+                
+                for entity in entities:
+                    entity_type = entity.get('type', 'other')
+                    storage_key = type_mapping.get(entity_type, 'other')
+                    categorized[storage_key].append(entity)
+                
+                return categorized
             return entities
-        except json.JSONDecodeError as e:
+        except Exception as e:
             self.logger.error(f"JSON parsing error: {str(e)}")
+            self.logger.error(f"Response preview: {response[:500]}")
             return {}
     
     def _merge_entities(self, new_entities: Dict[str, List[Dict[str, Any]]]):

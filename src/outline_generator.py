@@ -3,7 +3,7 @@ Step 2: Outline generator - Generate chapter outlines
 """
 import os
 from typing import Dict, Any, List, Optional
-from src.utils import save_json, load_json
+from src.utils import save_json, load_json, parse_json_from_response
 
 
 class OutlineGenerator:
@@ -314,28 +314,16 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
     
     def _parse_outline_response(self, response: str, batch_num: int) -> List[Dict[str, Any]]:
         """Parse LLM response to extract outline."""
-        import json
-        import re
-        
-        # Try to extract JSON from response
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1)
-        else:
-            # Try to find JSON object directly
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
-            else:
-                self.logger.error("Failed to extract JSON from response")
-                raise ValueError("Could not parse outline from LLM response")
-        
         try:
-            outline_data = json.loads(json_str)
+            outline_data = parse_json_from_response(response)
+            # Handle both direct list and object with 'chapters' key
+            if isinstance(outline_data, list):
+                return outline_data
             return outline_data.get('chapters', [])
-        except json.JSONDecodeError as e:
+        except Exception as e:
             self.logger.error(f"JSON parsing error: {str(e)}")
-            raise
+            self.logger.error(f"Response preview: {response[:500]}")
+            raise ValueError("Could not parse outline from LLM response")
     
     def _save_outline(self, outlines: List[Dict[str, Any]], batch_num: int):
         """Save outline to file."""
