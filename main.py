@@ -14,6 +14,8 @@ from src.outline_generator import OutlineGenerator
 from src.entity_manager import EntityManager
 from src.chapter_writer import ChapterWriter
 from src.post_processor import PostChapterProcessor
+from src.relevance_scorer import RelevanceScorer
+from src.conflict_manager import ConflictManager
 
 
 class StoryGenerator:
@@ -82,6 +84,10 @@ class StoryGenerator:
             self.config,
             self.paths
         )
+        
+        # Initialize relevance scorer and conflict manager for long-form story support
+        self.relevance_scorer = RelevanceScorer(self.config)
+        self.conflict_manager = ConflictManager(self.config, self.logger)
         
         # Inject dependencies into outline_generator
         self.outline_generator.entity_manager = self.entity_manager
@@ -182,19 +188,63 @@ class StoryGenerator:
     
     def _prepare_chapter_context(self, chapter_num: int, chapter_outline: Dict[str, Any],
                                  motif: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare context for chapter writing."""
-        # Get relevant entities
-        related_entities = self.entity_manager.get_relevant_entities(chapter_outline)
+        """Prepare context for chapter writing with relevance scoring for long-form stories."""
         
-        # Get related characters
+        # Check if optimizations are enabled
+        use_scoring = self.config.get('story', {}).get('use_relevance_scoring', True)
+        use_sliding_window = self.config.get('story', {}).get('use_sliding_window', True)
+        use_adaptive_limits = self.config.get('story', {}).get('use_adaptive_limits', True)
+        
+        # Get adaptive limits if enabled
+        if use_adaptive_limits:
+            total_chapters = self.config.get('story', {}).get('total_planned_chapters', 300)
+            limits = self.relevance_scorer.get_adaptive_limits(chapter_num, total_chapters)
+            entity_limit = limits['entities']
+            event_limit = limits['events']
+        else:
+            entity_limit = 20
+            event_limit = 10
+        
+        # Get entities with relevance scoring and sliding window
+        if use_scoring and use_sliding_window:
+            # Collect all entities across all categories
+            all_entities = []
+            for category, entities in self.entity_manager.entities.items():
+                for entity in entities:
+                    all_entities.append({**entity, 'category': category})
+            
+            # Use sliding window approach
+            related_entities = self.relevance_scorer.get_entities_with_sliding_window(
+                all_entities,
+                chapter_num,
+                chapter_outline,
+                max_entities=entity_limit
+            )
+        else:
+            # Fallback to original method
+            related_entities = self.entity_manager.get_relevant_entities(
+                chapter_outline,
+                max_entities=entity_limit
+            )
+        
+        # Get related characters (from entities)
         character_names = [c.get('name') for c in chapter_outline.get('characters', [])]
         related_characters = [
-            e for e in self.entity_manager.entities.get('characters', [])
-            if e.get('name') in character_names
+            e for e in related_entities
+            if e.get('category') == 'characters' or e.get('name') in character_names
         ]
         
-        # Get related events
-        related_events = self._get_relevant_events(chapter_outline)
+        # Get events with relevance scoring
+        if use_scoring:
+            related_events = self.relevance_scorer.get_events_with_sliding_window(
+                self.post_processor.events,
+                chapter_num,
+                chapter_outline,
+                max_events=event_limit
+            )
+        else:
+            # Fallback to original method
+            related_events = self._get_relevant_events(chapter_outline)[:event_limit]
         
         # Get recent summaries
         recent_summaries = self.post_processor.get_recent_summaries(count=2)
@@ -207,6 +257,11 @@ class StoryGenerator:
         if chapter_num > 1:
             previous_chapter_end = self.chapter_writer.get_chapter_end(chapter_num - 1)
         
+        self.logger.info(
+            f"Context prepared for chapter {chapter_num}: "
+            f"{len(related_entities)} entities, {len(related_events)} events"
+        )
+        
         return {
             'motif': motif,
             'related_entities': related_entities,
@@ -218,7 +273,7 @@ class StoryGenerator:
         }
     
     def _prepare_batch_context(self, batch_num: int, user_suggestions: Optional[str] = None) -> Dict[str, Any]:
-        """Prepare context for generating continuation outline."""
+        """Prepare context for generating continuation outline with conflict management."""
         # Get super summary
         super_summary = self.checkpoint.get_metadata('super_summary', '')
         
@@ -226,8 +281,23 @@ class StoryGenerator:
         recent_summary = self.post_processor.get_recent_summaries(count=1)
         recent_summary = recent_summary[0] if recent_summary else ''
         
-        # Get active conflicts from previous batch
-        active_conflicts = self.post_processor.get_unresolved_conflicts()
+        # Get current chapter number
+        current_chapter = (batch_num - 1) * self.chapters_per_batch
+        
+        # Get conflicts with pruning if enabled
+        use_conflict_pruning = self.config.get('story', {}).get('use_conflict_pruning', True)
+        
+        if use_conflict_pruning:
+            # Use conflict manager to get pruned and prioritized conflicts
+            active_conflicts = self.conflict_manager.select_conflicts_for_batch(
+                self.post_processor.conflicts,
+                batch_num,
+                current_chapter,
+                self.relevance_scorer
+            )
+        else:
+            # Fallback to original method
+            active_conflicts = self.post_processor.get_unresolved_conflicts()
         
         # From active conflicts, find related characters and entities
         related_characters = self._get_characters_from_conflicts(active_conflicts)
@@ -235,6 +305,11 @@ class StoryGenerator:
         
         # From related characters/entities, find related events
         related_events = self._get_events_from_characters_entities(related_characters, related_entities)
+        
+        self.logger.info(
+            f"Batch {batch_num} context: {len(active_conflicts)} conflicts, "
+            f"{len(related_characters)} characters, {len(related_entities)} entities"
+        )
         
         return {
             'super_summary': super_summary,

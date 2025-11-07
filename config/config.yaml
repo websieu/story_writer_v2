@@ -60,6 +60,20 @@ story:
   target_words_per_chapter: 5000
   last_chapter_context_chars: 1000
   max_chars_for_llm: 30000  # Maximum characters to send to LLM for processing (to avoid token limits)
+  total_planned_chapters: 300  # Total planned chapters for long-form story
+  
+  # Context windows for relevance scoring (in chapters)
+  context_windows:
+    immediate: 5      # Last 5 chapters - highest priority
+    recent: 20        # Last 20 chapters - high priority
+    medium: 50        # Last 50 chapters - medium priority
+    historical: 100   # Last 100 chapters - low priority
+  
+  # Enable optimizations for long-form stories
+  use_relevance_scoring: true
+  use_sliding_window: true
+  use_conflict_pruning: true
+  use_adaptive_limits: true
 
 # File Paths
 # All project data will be stored in projects/{project_id}/
