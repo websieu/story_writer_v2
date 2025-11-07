@@ -269,11 +269,13 @@ class EntityManager:
                         existing_entity['appear_in_chapters'] = merged_chapters
                         self.logger.info(f"Updated entity: {entity.get('name')} ({category}) - chapters: {merged_chapters}")
 
-                    # Update description if new one is longer/more detailed
+                    # Append new description if different from old one
                     new_desc = entity.get('description', '')
                     old_desc = existing_entity.get('description', '')
-                    if len(new_desc) > len(old_desc):
-                        existing_entity['description'] = new_desc
+                    if new_desc and new_desc != old_desc:
+                        # Append new description to existing one
+                        existing_entity['description'] = old_desc + "; " + new_desc
+                        self.logger.info(f"Appended description for entity: {entity.get('name')} ({category})")
                 else:
                     # New entity - add it
                     self.entities[category].append(entity)
