@@ -15,6 +15,7 @@ class PostChapterProcessor:
         self.logger = logger
         self.config = config
         self.paths = paths
+        self.max_chars = config.get('story', {}).get('max_chars_for_llm', 30000)
         self.events_file = os.path.join(paths['events_dir'], 'events.json')
         self.conflicts_file = os.path.join(paths['conflicts_dir'], 'conflicts.json')
         self.summaries_file = os.path.join(paths['summaries_dir'], 'summaries.json')
@@ -62,8 +63,7 @@ class PostChapterProcessor:
         self.logger.info(f"Extracting events from chapter {chapter_num}")
         
         # Truncate content if needed
-        max_chars = 15000
-        truncated = chapter_content[:max_chars] + "..." if len(chapter_content) > max_chars else chapter_content
+        truncated = chapter_content[:self.max_chars] + "..." if len(chapter_content) > self.max_chars else chapter_content
         
         prompt = f"""Hãy trích xuất các sự kiện QUAN TRỌNG từ chương {chapter_num}. Chỉ trích xuất những sự kiện 
         ảnh hưởng đến mạch truyện, không trích xuất những chi tiết nhỏ không quan trọng.
@@ -125,8 +125,7 @@ Hãy trích xuất theo định dạng JSON trên."""
         self.logger.info(f"Extracting conflicts from chapter {chapter_num}")
         
         # Truncate content if needed
-        max_chars = 15000
-        truncated = chapter_content[:max_chars] + "..." if len(chapter_content) > max_chars else chapter_content
+        truncated = chapter_content[:self.max_chars] + "..." if len(chapter_content) > self.max_chars else chapter_content
         
         # Get existing conflicts for reference
         unresolved = self.get_unresolved_conflicts()
@@ -207,8 +206,7 @@ Hãy trích xuất theo định dạng JSON trên."""
         self.logger.info(f"Generating summary for chapter {chapter_num}")
         
         # Truncate content if needed
-        max_chars = 15000
-        truncated = chapter_content[:max_chars] + "..." if len(chapter_content) > max_chars else chapter_content
+        truncated = chapter_content[:self.max_chars] + "..." if len(chapter_content) > self.max_chars else chapter_content
         
         prompt = f"""Hãy tóm tắt ngắn gọn nội dung chương {chapter_num}.
 

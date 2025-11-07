@@ -16,6 +16,7 @@ class EntityManager:
         self.logger = logger
         self.config = config
         self.paths = paths
+        self.max_chars = config.get('story', {}).get('max_chars_for_llm', 30000)
         self.entity_file = os.path.join(paths['entities_dir'], 'entities.json')
         self.entities = self._load_entities()
     
@@ -64,6 +65,9 @@ class EntityManager:
         # Parse entities
         new_entities = self._parse_entity_response(result['response'])
         
+        # Save entities for this batch (before merging)
+        self._save_batch_entities(new_entities, batch_num)
+        
         # Merge with existing entities
         self._merge_entities(new_entities)
         
@@ -108,6 +112,9 @@ class EntityManager:
         
         # Parse new entities
         new_entities = self._parse_entity_response(result['response'])
+        
+        # Save entities for this chapter (before merging)
+        self._save_chapter_entities(new_entities, chapter_num)
         
         # Merge with existing entities
         self._merge_entities(new_entities)
@@ -174,8 +181,7 @@ class EntityManager:
     def _create_chapter_extraction_prompt(self, chapter_content: str, chapter_num: int) -> str:
         """Create prompt for extracting new entities from chapter content."""
         # Truncate content if too long
-        max_chars = 30000
-        truncated_content = chapter_content[:max_chars] + "..." if len(chapter_content) > max_chars else chapter_content
+        truncated_content = chapter_content[:self.max_chars] + "..." if len(chapter_content) > self.max_chars else chapter_content
         
         # Get existing entity names for reference
         existing_names = self._get_all_entity_names()
@@ -253,6 +259,36 @@ class EntityManager:
         """Save entities to file."""
         save_json(self.entities, self.entity_file)
         self.logger.info(f"Saved entities to {self.entity_file}")
+    
+    def _save_batch_entities(self, entities: Dict[str, List[Dict[str, Any]]], batch_num: int):
+        """Save entities extracted from a specific batch."""
+        batch_file = os.path.join(self.paths['entities_dir'], f'batch_{batch_num:03d}_entities.json')
+        
+        # Add metadata
+        entity_data = {
+            'batch_number': batch_num,
+            'extraction_type': 'from_outlines',
+            'total_count': sum(len(v) for v in entities.values()),
+            'entities': entities
+        }
+        
+        save_json(entity_data, batch_file)
+        self.logger.info(f"Saved batch {batch_num} entities to {batch_file}")
+    
+    def _save_chapter_entities(self, entities: Dict[str, List[Dict[str, Any]]], chapter_num: int):
+        """Save entities extracted from a specific chapter."""
+        chapter_file = os.path.join(self.paths['entities_dir'], f'chapter_{chapter_num:03d}_entities.json')
+        
+        # Add metadata
+        entity_data = {
+            'chapter_number': chapter_num,
+            'extraction_type': 'from_chapter_content',
+            'total_count': sum(len(v) for v in entities.values()),
+            'entities': entities
+        }
+        
+        save_json(entity_data, chapter_file)
+        self.logger.info(f"Saved chapter {chapter_num} entities to {chapter_file}")
     
     def _count_entities(self) -> int:
         """Count total number of entities."""

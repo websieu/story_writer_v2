@@ -59,6 +59,7 @@ story:
   chapters_per_batch: 5
   target_words_per_chapter: 5000
   last_chapter_context_chars: 1000
+  max_chars_for_llm: 30000  # Maximum characters to send to LLM for processing (to avoid token limits)
 
 # File Paths
 # All project data will be stored in projects/{project_id}/
