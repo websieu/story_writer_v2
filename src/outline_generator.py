@@ -399,8 +399,19 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
         """Format entities for prompt."""
         if not entities:
             return "Chưa có"
-        return "\n".join([f"- {e.get('name', 'Unknown')} ({e.get('category', e.get('type', 'unknown'))}): {e.get('description', '')[:100]}" 
-                         for e in entities[:20]])
+
+        formatted = []
+        for e in entities[:20]:
+            # Handle description as array or string
+            desc = e.get('description', '')
+            if isinstance(desc, list):
+                desc_text = "; ".join(desc) if desc else ""
+            else:
+                desc_text = desc
+
+            formatted.append(f"- {e.get('name', 'Unknown')} ({e.get('category', e.get('type', 'unknown'))}): {desc_text[:100]}")
+
+        return "\n".join(formatted)
     
     def _format_events(self, events: List[Dict]) -> str:
         """Format events for prompt."""

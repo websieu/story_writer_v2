@@ -202,14 +202,23 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
         """Format entity information."""
         if not entities:
             return ""
-        
+
         entity_list = []
         for e in entities[:15]:
             entity_info = f"- **{e.get('name', 'Unknown')}** ({e.get('category', e.get('type', 'unknown'))})"
-            if e.get('description'):
-                entity_info += f": {e.get('description', '')[:150]}"
+
+            # Handle description as array or string
+            desc = e.get('description', '')
+            if isinstance(desc, list):
+                # Join all descriptions with "; " separator
+                desc_text = "; ".join(desc) if desc else ""
+            else:
+                desc_text = desc
+
+            if desc_text:
+                entity_info += f": {desc_text[:150]}"
             entity_list.append(entity_info)
-        
+
         return "**Entity liên quan:**\n" + "\n".join(entity_list) if entity_list else ""
     
     def _format_key_events(self, events: List[Dict[str, Any]]) -> str:
@@ -243,11 +252,11 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
     def _get_entities_from_outline(self, outline_entities: List[Dict[str, Any]], chapter_num: int) -> List[Dict[str, Any]]:
         """
         Get full entity details from entity names in outline, filtered by chapter number.
-        
+
         Args:
             outline_entities: List of entity references from the outline
             chapter_num: Current chapter number to filter entities
-            
+
         Returns:
             List of entities that appear in this specific chapter
         """
@@ -263,7 +272,9 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
                         full_entities.append(entity)
                 else:
                     # If not found in entity manager, use the outline entity info as fallback
-                    full_entities.append(outline_entity)
+                    # Also check appear_in_chapters for outline entity
+                    if chapter_num in outline_entity.get('appear_in_chapters', []):
+                        full_entities.append(outline_entity)
         return full_entities
     
     def _filter_entities_by_chapter(self, entities: List[Dict[str, Any]], chapter_num: int) -> List[Dict[str, Any]]:

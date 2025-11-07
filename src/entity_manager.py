@@ -241,19 +241,52 @@ class EntityManager:
             return {}
     
     def _merge_entities(self, new_entities: Dict[str, List[Dict[str, Any]]]):
-        """Merge new entities with existing ones, avoiding duplicates."""
+        """Merge new entities with existing ones, updating appear_in_chapters."""
         for category, entities in new_entities.items():
             if category not in self.entities:
                 self.entities[category] = []
-            
-            existing_names = {e.get('name', '').lower() for e in self.entities[category]}
-            
+
+            # Create index for faster lookup
+            existing_index = {e.get('name', '').lower(): i
+                            for i, e in enumerate(self.entities[category])}
+
             for entity in entities:
                 entity_name = entity.get('name', '').lower()
-                if entity_name and entity_name not in existing_names:
+                if not entity_name:
+                    continue
+
+                if entity_name in existing_index:
+                    # Entity exists - merge appear_in_chapters
+                    idx = existing_index[entity_name]
+                    existing_entity = self.entities[category][idx]
+
+                    # Merge appear_in_chapters
+                    existing_chapters = set(existing_entity.get('appear_in_chapters', []))
+                    new_chapters = set(entity.get('appear_in_chapters', []))
+                    merged_chapters = sorted(list(existing_chapters | new_chapters))
+
+                    if merged_chapters:
+                        existing_entity['appear_in_chapters'] = merged_chapters
+                        self.logger.info(f"Updated entity: {entity.get('name')} ({category}) - chapters: {merged_chapters}")
+
+                    # Merge descriptions as array
+                    # Convert old description to array if it's a string (backward compatibility)
+                    existing_desc = existing_entity.get('description', [])
+                    if isinstance(existing_desc, str):
+                        existing_desc = [existing_desc] if existing_desc else []
+                        existing_entity['description'] = existing_desc
+
+                    # Get new description
+                    new_desc = entity.get('description', '')
+
+                    # Append new description if not empty and not duplicate
+                    if new_desc and new_desc not in existing_desc:
+                        existing_desc.append(new_desc)
+                        self.logger.info(f"Appended description for entity: {entity.get('name')} ({category}) - total descriptions: {len(existing_desc)}")
+                else:
+                    # New entity - add it
                     self.entities[category].append(entity)
-                    existing_names.add(entity_name)
-                    self.logger.info(f"Added new entity: {entity.get('name')} ({category})")
+                    self.logger.info(f"Added new entity: {entity.get('name')} ({category}) - chapters: {entity.get('appear_in_chapters', [])}")
     
     def _save_entities(self):
         """Save entities to file."""
