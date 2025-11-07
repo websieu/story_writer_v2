@@ -1,5 +1,5 @@
 """
-Step 2: Outline generator - Generate chapter outlines (Updated version with conflict-driven logic)
+Step 2: Outline generator - Generate chapter outlines
 """
 import os
 from typing import Dict, Any, List, Optional
@@ -16,9 +16,6 @@ class OutlineGenerator:
         self.config = config
         self.paths = paths
         self.chapters_per_batch = config['story']['chapters_per_batch']
-        # Will be injected by main.py
-        self.entity_manager = None
-        self.post_processor = None
     
     def generate_initial_outline(self, motif: Dict[str, Any], batch_num: int = 1) -> List[Dict[str, Any]]:
         """
@@ -73,10 +70,10 @@ class OutlineGenerator:
             context: Dictionary containing:
                 - super_summary: Brief summary of entire story so far
                 - recent_summary: Summary of most recent chapter
-                - active_conflicts: List of active conflicts from previous batch
-                - related_characters: Characters related to active conflicts
-                - related_entities: Entities related to active conflicts
-                - related_events: Events related to characters/entities
+                - characters: List of relevant characters
+                - entities: List of relevant entities
+                - events: List of important events
+                - unresolved_conflicts: List of conflicts not yet resolved
                 - user_suggestions: Optional user input
         """
         step_name = "outline_generation"
@@ -88,11 +85,8 @@ class OutlineGenerator:
         
         self.logger.info(f"Generating continuation outline for batch {batch_num}")
         
-        # Step 1: Analyze conflicts and determine which to resolve/develop
-        conflict_plan = self._analyze_conflicts_for_batch(batch_num, context)
-        
-        # Step 2: Create prompt for continuation outline with conflict plan
-        prompt = self._create_continuation_outline_prompt(batch_num, context, conflict_plan)
+        # Create prompt for continuation outline
+        prompt = self._create_continuation_outline_prompt(batch_num, context)
         
         system_message = """Bạn là một tác giả truyện tu tiên chuyên nghiệp. Nhiệm vụ của bạn là tiếp tục phát triển 
         cốt truyện một cách hợp lý, giải quyết các mâu thuẫn hiện có đồng thời mở ra hướng phát triển mới."""
@@ -119,86 +113,6 @@ class OutlineGenerator:
         )
         
         return outlines
-    
-    def _analyze_conflicts_for_batch(self, batch_num: int, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Analyze active conflicts and determine which should be resolved or developed in this batch.
-        
-        Returns:
-            Dictionary with conflict planning information
-        """
-        self.logger.info(f"Analyzing conflicts for batch {batch_num}")
-        
-        active_conflicts = context.get('active_conflicts', [])
-        
-        if not active_conflicts:
-            return {
-                'conflicts_to_resolve': [],
-                'conflicts_to_develop': [],
-                'conflicts_to_introduce': []
-            }
-        
-        # Create prompt to ask LLM about conflict planning
-        prompt = f"""Dựa vào các mâu thuẫn đang hoạt động từ batch trước, hãy xác định:
-1. Mâu thuẫn nào NÊN ĐƯỢC GIẢI QUYẾT trong batch {batch_num} này (5 chương tiếp theo)
-2. Mâu thuẫn nào NÊN TIẾP TỤC PHÁT TRIỂN (chưa giải quyết)
-3. Gợi ý về mâu thuẫn mới có thể xuất hiện
-
-**MÂU THUẪN ĐANG HOẠT ĐỘNG:**
-{self._format_conflicts_detailed(active_conflicts)}
-
-**NGUYÊN TẮC XẾP LOẠI:**
-- immediate (1 chapter): BẮT BUỘC giải quyết ngay
-- batch (5 chapters): NÊN giải quyết trong batch này
-- short_term (10 chapters): CÓ THỂ giải quyết hoặc tiếp tục phát triển
-- medium_term, long_term, epic: TIẾP TỤC PHÁT TRIỂN, chưa giải quyết
-
-**YÊU CẦU OUTPUT (JSON):**
-
-```json
-{{
-  "conflicts_to_resolve": [
-    {{
-      "conflict_id": "id của conflict cần giải quyết",
-      "expected_resolution_chapter": <số chương dự kiến giải quyết trong batch>,
-      "resolution_approach": "cách tiếp cận giải quyết"
-    }}
-  ],
-  "conflicts_to_develop": [
-    {{
-      "conflict_id": "id của conflict tiếp tục phát triển",
-      "development_direction": "hướng phát triển"
-    }}
-  ],
-  "conflicts_to_introduce": [
-    {{
-      "description": "mô tả mâu thuẫn mới gợi ý",
-      "timeline": "batch/short_term/medium_term",
-      "reason": "lý do cần thiết lập mâu thuẫn này"
-    }}
-  ]
-}}
-```
-
-Hãy phân tích và trả về JSON."""
-        
-        result = self.llm_client.call(
-            prompt=prompt,
-            task_name="conflict_analysis",
-            system_message="Bạn là chuyên gia phân tích cốt truyện và xung đột trong văn học.",
-            batch_id=batch_num
-        )
-        
-        try:
-            conflict_plan = parse_json_from_response(result['response'])
-            return conflict_plan
-        except Exception as e:
-            self.logger.warning(f"Failed to parse conflict analysis: {str(e)}")
-            return {
-                'conflicts_to_resolve': [],
-                'conflicts_to_develop': [],
-                'conflicts_to_introduce': []
-            }
     
     def _create_initial_outline_prompt(self, motif: Dict[str, Any]) -> str:
         """Create prompt for initial outline generation."""
@@ -282,8 +196,7 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
         
         return prompt
     
-    def _create_continuation_outline_prompt(self, batch_num: int, context: Dict[str, Any], 
-                                           conflict_plan: Dict[str, Any]) -> str:
+    def _create_continuation_outline_prompt(self, batch_num: int, context: Dict[str, Any]) -> str:
         """Create prompt for continuation outline generation."""
         start_chapter = (batch_num - 1) * self.chapters_per_batch + 1
         end_chapter = start_chapter + self.chapters_per_batch - 1
@@ -298,42 +211,29 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
 **Tóm tắt chương gần nhất:**
 {context.get('recent_summary', 'Chưa có')}
 
-**MÂU THUẪN CẦN XỬ LÝ:**
-
-**Mâu thuẫn cần giải quyết trong batch này:**
-{self._format_conflicts_to_resolve(conflict_plan.get('conflicts_to_resolve', []))}
-
-**Mâu thuẫn tiếp tục phát triển:**
-{self._format_conflicts_to_develop(conflict_plan.get('conflicts_to_develop', []))}
-
-**Gợi ý mâu thuẫn mới:**
-{self._format_conflicts_to_introduce(conflict_plan.get('conflicts_to_introduce', []))}
-
 **Nhân vật liên quan:**
-{self._format_characters(context.get('related_characters', []))}
+{self._format_characters(context.get('characters', []))}
 
 **Entity liên quan:**
-{self._format_entities(context.get('related_entities', []))}
+{self._format_entities(context.get('entities', []))}
 
 **Sự kiện quan trọng:**
-{self._format_events(context.get('related_events', []))}
+{self._format_events(context.get('events', []))}
+
+**Mâu thuẫn chưa giải quyết:**
+{self._format_conflicts(context.get('unresolved_conflicts', []))}
 
 **Gợi ý từ người dùng:**
 {context.get('user_suggestions', 'Không có')}
 
 **YÊU CẦU:**
 
-1. Phải xử lý các mâu thuẫn theo kế hoạch đã phân tích ở trên
-2. Sử dụng các nhân vật và entity đã có một cách hợp lý
-3. Tạo sự liên kết chặt chẽ giữa các chương
-4. Cài cắm foreshadowing cho các batch sau
-5. Xác định rõ mục đích, động cơ của nhân vật chính trong mỗi chương
-
-**LƯU Ý QUAN TRỌNG:**
-- Mỗi chapter outline PHẢI có field "conflict_ids": danh sách ID các mâu thuẫn được đề cập/xử lý trong chương đó
-- Mỗi chapter outline PHẢI có field "expected_conflict_updates": dictionary mapping conflict_id -> expected status sau chapter này
-- Mỗi chapter outline PHẢI có field "entities": danh sách entities liên quan đến chương này
-- Ví dụ: "expected_conflict_updates": {{"lh_01_02": "resolved", "lh_02_01": "developing"}}
+1. Phải giải quyết ít nhất 1-2 mâu thuẫn có timeline phù hợp với batch này
+2. Mở ra ít nhất 1-2 mâu thuẫn mới cho các batch sau
+3. Sử dụng các nhân vật và entity đã có một cách hợp lý
+4. Tạo sự liên kết chặt chẽ giữa các chương
+5. Cài cắm foreshadowing cho các batch sau
+6. Xác định rõ mục đích, động cơ của nhân vật chính trong mỗi chương
 
 **ĐỊNH DẠNG OUTPUT (JSON):**
 
@@ -346,20 +246,13 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
       "title": "Tên chương",
       "summary": "Tóm tắt nội dung chính...",
       "key_events": [
-        {{"event": "Mô tả sự kiện", "importance": 0.9, "related_entities": ["entity1", "entity2"]}}
+        {{"event": "Mô tả sự kiện", "importance": 0.9}}
       ],
       "characters": [
         {{
           "name": "Tên nhân vật",
           "role": "Vai trò trong chương này",
           "motivation": "Mục đích, động cơ"
-        }}
-      ],
-      "entities": [
-        {{
-          "name": "Tên entity",
-          "category": "characters/items/locations/techniques/...",
-          "relevance": "Tại sao entity này quan trọng trong chương"
         }}
       ],
       "conflicts": [
@@ -370,14 +263,16 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
           "status": "introduced/developing/resolved"
         }}
       ],
-      "conflict_ids": ["lh_01_01", "lh_02_03"],
-      "expected_conflict_updates": {{
-        "lh_01_01": "developing",
-        "lh_02_03": "resolved"
-      }},
       "settings": ["Địa điểm"],
       "foreshadowing": [
         {{"detail": "Chi tiết cài cắm", "reveal_chapter": null, "importance": 0.8}}
+      ],
+      "resolved_conflicts": ["ID hoặc mô tả mâu thuẫn đã giải quyết"],
+      "new_conflicts": [
+        {{
+          "description": "Mâu thuẫn mới",
+          "timeline": "long-term"
+        }}
       ]
     }}
   ]
@@ -399,7 +294,7 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
         """Format entities for prompt."""
         if not entities:
             return "Chưa có"
-        return "\n".join([f"- {e.get('name', 'Unknown')} ({e.get('category', e.get('type', 'unknown'))}): {e.get('description', '')[:100]}" 
+        return "\n".join([f"- {e.get('name', 'Unknown')} ({e.get('type', 'unknown')}): {e.get('description', '')[:100]}" 
                          for e in entities[:20]])
     
     def _format_events(self, events: List[Dict]) -> str:
@@ -414,57 +309,8 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
         """Format conflicts for prompt."""
         if not conflicts:
             return "Chưa có"
-        return "\n".join([f"- [{c.get('timeline', 'unknown')}] {c.get('description', '')} (ID: {c.get('id', 'N/A')})" 
+        return "\n".join([f"- [{c.get('timeline', 'unknown')}] {c.get('description', '')}" 
                          for c in conflicts])
-    
-    def _format_conflicts_detailed(self, conflicts: List[Dict]) -> str:
-        """Format conflicts with detailed information."""
-        if not conflicts:
-            return "Chưa có"
-        result = []
-        for c in conflicts:
-            text = f"- ID: {c.get('id', 'N/A')}\n"
-            text += f"  Mô tả: {c.get('description', '')}\n"
-            text += f"  Timeline: {c.get('timeline', 'unknown')}\n"
-            text += f"  Nhân vật: {', '.join(c.get('characters_involved', []))}\n"
-            text += f"  Entity: {', '.join(c.get('entities_involved', []))}"
-            result.append(text)
-        return "\n\n".join(result)
-    
-    def _format_conflicts_to_resolve(self, conflicts: List[Dict]) -> str:
-        """Format conflicts to resolve."""
-        if not conflicts:
-            return "Không có"
-        result = []
-        for c in conflicts:
-            text = f"- Conflict ID: {c.get('conflict_id')}\n"
-            text += f"  Dự kiến giải quyết ở chương: {c.get('expected_resolution_chapter', 'N/A')}\n"
-            text += f"  Cách tiếp cận: {c.get('resolution_approach', '')}"
-            result.append(text)
-        return "\n\n".join(result)
-    
-    def _format_conflicts_to_develop(self, conflicts: List[Dict]) -> str:
-        """Format conflicts to develop."""
-        if not conflicts:
-            return "Không có"
-        result = []
-        for c in conflicts:
-            text = f"- Conflict ID: {c.get('conflict_id')}\n"
-            text += f"  Hướng phát triển: {c.get('development_direction', '')}"
-            result.append(text)
-        return "\n\n".join(result)
-    
-    def _format_conflicts_to_introduce(self, conflicts: List[Dict]) -> str:
-        """Format new conflicts to introduce."""
-        if not conflicts:
-            return "Không có"
-        result = []
-        for c in conflicts:
-            text = f"- Mô tả: {c.get('description', '')}\n"
-            text += f"  Timeline: {c.get('timeline', 'unknown')}\n"
-            text += f"  Lý do: {c.get('reason', '')}"
-            result.append(text)
-        return "\n\n".join(result)
     
     def _parse_outline_response(self, response: str, batch_num: int) -> List[Dict[str, Any]]:
         """Parse LLM response to extract outline."""

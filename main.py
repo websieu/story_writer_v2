@@ -83,6 +83,10 @@ class StoryGenerator:
             self.paths
         )
         
+        # Inject dependencies into outline_generator
+        self.outline_generator.entity_manager = self.entity_manager
+        self.outline_generator.post_processor = self.post_processor
+        
         self.logger.info(f"StoryGenerator initialized for project: {project_id}")
         self.logger.info(f"Project root: {self.paths['project_root']}")
     
@@ -222,28 +226,23 @@ class StoryGenerator:
         recent_summary = self.post_processor.get_recent_summaries(count=1)
         recent_summary = recent_summary[0] if recent_summary else ''
         
-        # Get relevant characters (top characters by appearance)
-        characters = self._get_top_characters(limit=15)
+        # Get active conflicts from previous batch
+        active_conflicts = self.post_processor.get_unresolved_conflicts()
         
-        # Get relevant entities
-        entities = self._get_top_entities(limit=20)
+        # From active conflicts, find related characters and entities
+        related_characters = self._get_characters_from_conflicts(active_conflicts)
+        related_entities = self._get_entities_from_conflicts(active_conflicts)
         
-        # Get important events
-        events = self._get_top_events(limit=15)
-        
-        # Get unresolved conflicts
-        unresolved_conflicts = self.post_processor.get_unresolved_conflicts()
-        
-        # Select conflicts that should be addressed in this batch
-        conflicts_to_address = self._select_conflicts_for_batch(batch_num, unresolved_conflicts)
+        # From related characters/entities, find related events
+        related_events = self._get_events_from_characters_entities(related_characters, related_entities)
         
         return {
             'super_summary': super_summary,
             'recent_summary': recent_summary,
-            'characters': characters,
-            'entities': entities,
-            'events': events,
-            'unresolved_conflicts': conflicts_to_address,
+            'active_conflicts': active_conflicts,
+            'related_characters': related_characters,
+            'related_entities': related_entities,
+            'related_events': related_events,
             'user_suggestions': user_suggestions or ''
         }
     
@@ -318,6 +317,58 @@ class StoryGenerator:
         selected.extend(medium_term[:2])
         
         return selected
+    
+    def _get_characters_from_conflicts(self, conflicts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Get characters related to conflicts."""
+        character_names = set()
+        for conflict in conflicts:
+            chars = conflict.get('characters_involved', [])
+            character_names.update(chars)
+        
+        # Get full character details
+        characters = []
+        for char_name in character_names:
+            char = self.entity_manager.get_entity_by_name(char_name)
+            if char:
+                characters.append(char)
+        
+        return characters
+    
+    def _get_entities_from_conflicts(self, conflicts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Get entities related to conflicts."""
+        entity_names = set()
+        for conflict in conflicts:
+            entities = conflict.get('entities_involved', [])
+            entity_names.update(entities)
+        
+        # Get full entity details
+        entities = []
+        for entity_name in entity_names:
+            entity = self.entity_manager.get_entity_by_name(entity_name)
+            if entity:
+                entities.append(entity)
+        
+        return entities
+    
+    def _get_events_from_characters_entities(self, characters: List[Dict[str, Any]], 
+                                            entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Get events related to characters and entities."""
+        character_names = {c.get('name') for c in characters}
+        entity_names = {e.get('name') for e in entities}
+        
+        related_events = []
+        for event in self.post_processor.events:
+            # Check if event involves any of the characters
+            event_chars = set(event.get('characters_involved', []))
+            # Check if event involves any of the entities
+            event_entities = set(event.get('entities_involved', []))
+            
+            if event_chars.intersection(character_names) or event_entities.intersection(entity_names):
+                related_events.append(event)
+        
+        # Sort by importance and return top events
+        related_events.sort(key=lambda x: x.get('importance', 0), reverse=True)
+        return related_events[:20]
     
     def _save_final_summary(self):
         """Save final cost and progress summary."""

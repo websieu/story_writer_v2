@@ -86,6 +86,7 @@ class PostChapterProcessor:
       "description": "Mô tả sự kiện ngắn gọn",
       "importance": 0.9,
       "characters_involved": ["Tên nhân vật 1", "Tên nhân vật 2"],
+      "entities_involved": ["Entity 1", "Entity 2"],
       "location": "Địa điểm xảy ra",
       "consequences": "Hậu quả/ảnh hưởng của sự kiện"
     }}
@@ -160,7 +161,8 @@ Hãy trích xuất theo định dạng JSON trên."""
       "description": "Mô tả mâu thuẫn",
       "type": "internal/external/philosophical",
       "timeline": "batch",
-      "characters_involved": ["Nhân vật"],
+      "characters_involved": ["Nhân vật 1", "Nhân vật 2"],
+      "entities_involved": ["Entity 1", "Entity 2"],
       "introduced_chapter": {chapter_num},
       "status": "active"
     }}

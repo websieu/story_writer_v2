@@ -86,9 +86,22 @@ class ChapterWriter:
         motif_section = self._format_motif(context.get('motif', {}))
         summary_section = self._format_summaries(context.get('recent_summaries', []), context.get('super_summary', ''))
         previous_end_section = self._format_previous_end(context.get('previous_chapter_end', ''))
+        
+        # Prefer entities from outline, fallback to context
+        outline_entities = chapter_outline.get('entities', [])
+        if outline_entities:
+            # Get full entity details filtered by current chapter number
+            related_entities = self._get_entities_from_outline(outline_entities, chapter_num)
+        else:
+            # Filter context entities by chapter number if available
+            related_entities = self._filter_entities_by_chapter(
+                context.get('related_entities', []), 
+                chapter_num
+            )
+        
         characters_section = self._format_characters(context.get('related_characters', []))
         events_section = self._format_events(context.get('related_events', []))
-        entities_section = self._format_entities(context.get('related_entities', []))
+        entities_section = self._format_entities(related_entities)
         
         prompt = f"""Hãy viết nội dung chi tiết cho chương {chapter_num} dựa trên outline và ngữ cảnh sau:
 
@@ -226,6 +239,52 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
             return "Không có"
         return "\n".join([f"- [{c.get('timeline', 'unknown')}] {c.get('description', '')} (trạng thái: {c.get('status', 'unknown')})" 
                          for c in conflicts])
+    
+    def _get_entities_from_outline(self, outline_entities: List[Dict[str, Any]], chapter_num: int) -> List[Dict[str, Any]]:
+        """
+        Get full entity details from entity names in outline, filtered by chapter number.
+        
+        Args:
+            outline_entities: List of entity references from the outline
+            chapter_num: Current chapter number to filter entities
+            
+        Returns:
+            List of entities that appear in this specific chapter
+        """
+        full_entities = []
+        for outline_entity in outline_entities:
+            entity_name = outline_entity.get('name', '')
+            if entity_name:
+                # Try to find full entity details from entity manager
+                entity = self.entity_manager.get_entity_by_name(entity_name)
+                if entity:
+                    # Only include if entity appears in this chapter
+                    if chapter_num in entity.get('appear_in_chapters', []):
+                        full_entities.append(entity)
+                else:
+                    # If not found in entity manager, use the outline entity info as fallback
+                    full_entities.append(outline_entity)
+        return full_entities
+    
+    def _filter_entities_by_chapter(self, entities: List[Dict[str, Any]], chapter_num: int) -> List[Dict[str, Any]]:
+        """
+        Filter entities to only include those that appear in the specified chapter.
+        
+        Args:
+            entities: List of entities to filter
+            chapter_num: Chapter number to filter by
+            
+        Returns:
+            Filtered list of entities
+        """
+        filtered = []
+        for entity in entities:
+            appear_in = entity.get('appear_in_chapters', [])
+            # If entity has no chapter info, include it (backward compatibility)
+            # Otherwise, only include if it appears in this chapter
+            if not appear_in or chapter_num in appear_in:
+                filtered.append(entity)
+        return filtered
     
     def _save_chapter(self, content: str, chapter_num: int, title: str):
         """Save chapter content to file."""
