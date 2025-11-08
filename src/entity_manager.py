@@ -113,6 +113,13 @@ class EntityManager:
         # Parse new entities
         new_entities = self._parse_entity_response(result['response'])
         
+        # Add metadata to all extracted entities
+        for category, entities in new_entities.items():
+            for entity in entities:
+                # Add chapter metadata
+                entity['extracted_from_chapter'] = chapter_num
+                entity['appear_in_chapters'] = [chapter_num]
+        
         # Save entities for this chapter (before merging)
         self._save_chapter_entities(new_entities, chapter_num)
         
@@ -137,30 +144,47 @@ class EntityManager:
         Get entities relevant to a specific chapter outline.
         
         Uses character names, settings, and conflicts to find relevant entities.
+        Filters entities by appear_in_chapters for better accuracy.
         """
         relevant = []
+        chapter_num = chapter_outline.get('chapter_number', 0)
         
         # Get character names from outline
         character_names = [c.get('name', '') for c in chapter_outline.get('characters', [])]
         settings = chapter_outline.get('settings', [])
         
-        # Add characters that appear in the chapter
+        # Add characters that appear in this chapter
         for char in self.entities.get('characters', []):
             if char.get('name') in character_names:
-                relevant.append(char)
+                # Filter by appear_in_chapters
+                if self._entity_appears_in_chapter(char, chapter_num):
+                    relevant.append(char)
+        
+        # Extract location keywords from settings (settings are full description strings)
+        location_keywords = []
+        for setting in settings:
+            # Extract capitalized words as potential location names
+            words = setting.split()
+            location_keywords.extend([w.strip(',.;:') for w in words if w and w[0].isupper()])
         
         # Add locations mentioned in settings
         for loc in self.entities.get('locations', []):
-            if any(setting in loc.get('name', '') for setting in settings):
-                relevant.append(loc)
+            loc_name = loc.get('name', '')
+            # Check if any keyword matches location name (both directions)
+            if any(keyword in loc_name or loc_name in keyword for keyword in location_keywords):
+                if self._entity_appears_in_chapter(loc, chapter_num):
+                    relevant.append(loc)
         
-        # Add other entities associated with characters
-        for entity_type in ['items', 'techniques', 'spiritual_herbs', 'beasts', 'factions']:
+        # Add other entities that appear in this chapter
+        # Filter by appear_in_chapters instead of relying on associated_characters
+        for entity_type in ['items', 'techniques', 'spiritual_herbs', 'beasts', 'factions', 'other']:
             for entity in self.entities.get(entity_type, []):
-                # Check if entity is associated with any character in the chapter
-                associated = entity.get('associated_characters', [])
-                if any(name in associated for name in character_names):
-                    relevant.append(entity)
+                if self._entity_appears_in_chapter(entity, chapter_num):
+                    # Optionally also check associated_characters for extra filtering
+                    associated = entity.get('associated_characters', [])
+                    if not associated or any(name in associated for name in character_names):
+                        relevant.append(entity)
+                        relevant.append(entity)
         
         return relevant[:max_entities]
     
@@ -342,3 +366,51 @@ class EntityManager:
                 if entity.get('name', '').lower() == name_lower:
                     return {**entity, 'category': category}
         return None
+    
+    def _entity_appears_in_chapter(self, entity: Dict[str, Any], chapter_num: int) -> bool:
+        """
+        Check if entity appears in given chapter.
+        
+        Args:
+            entity: Entity dict with optional 'appear_in_chapters' field
+            chapter_num: Chapter number to check
+            
+        Returns:
+            True if entity has appear_in_chapters field and chapter_num is in it
+        """
+        appear_in = entity.get('appear_in_chapters')
+        # Only include entities that explicitly have chapter metadata
+        # Entities without this field are from chapter extraction and shouldn't appear everywhere
+        return appear_in is not None and chapter_num in appear_in
+    
+    def get_entities_by_chapter(self, chapter_num: int, 
+                                entity_types: Optional[List[str]] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Get all entities that appear in a specific chapter.
+        
+        Args:
+            chapter_num: Chapter number to filter by
+            entity_types: Optional list of entity types to include (e.g., ['characters', 'locations'])
+                         If None, includes all types
+            
+        Returns:
+            Dictionary of entities grouped by type
+        """
+        result = {}
+        
+        # Determine which types to include
+        types_to_check = entity_types if entity_types else self.entities.keys()
+        
+        for entity_type in types_to_check:
+            if entity_type not in self.entities:
+                continue
+                
+            filtered = []
+            for entity in self.entities[entity_type]:
+                if self._entity_appears_in_chapter(entity, chapter_num):
+                    filtered.append(entity)
+            
+            if filtered:
+                result[entity_type] = filtered
+        
+        return result

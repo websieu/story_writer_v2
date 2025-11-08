@@ -10,13 +10,14 @@ from src.utils import save_text, load_text, save_json, load_json
 class ChapterWriter:
     """Generate detailed chapter content from outlines."""
     
-    def __init__(self, llm_client, checkpoint_manager, logger, config, entity_manager, paths):
+    def __init__(self, llm_client, checkpoint_manager, logger, config, entity_manager, paths, post_processor=None):
         self.llm_client = llm_client
         self.checkpoint = checkpoint_manager
         self.logger = logger
         self.config = config
         self.paths = paths
         self.entity_manager = entity_manager
+        self.post_processor = post_processor
         self.target_words = config['story']['target_words_per_chapter']
         self.last_chapter_chars = config['story']['last_chapter_context_chars']
     
@@ -79,13 +80,19 @@ class ChapterWriter:
         return chapter_content
     
     def _create_writing_prompt(self, chapter_outline: Dict[str, Any], context: Dict[str, Any]) -> str:
-        """Create detailed writing prompt."""
+        """Create detailed writing prompt without duplicate information."""
         chapter_num = chapter_outline.get('chapter_number', 0)
         
-        # Build context sections
-        motif_section = self._format_motif(context.get('motif', {}))
+        # Build context sections (minimized to avoid duplication)
+        motif_section = self._format_motif_minimal(context.get('motif', {}))
         summary_section = self._format_summaries(context.get('recent_summaries', []), context.get('super_summary', ''))
         previous_end_section = self._format_previous_end(context.get('previous_chapter_end', ''))
+        
+        # Get next chapter summary from outline (if available)
+        next_chapter_summary = self._format_next_chapter_summary(context.get('next_chapter_outline'))
+        
+        # Get character names from outline to avoid duplication
+        outline_char_names = {c.get('name', '') for c in chapter_outline.get('characters', [])}
         
         # Prefer entities from outline, fallback to context
         outline_entities = chapter_outline.get('entities', [])
@@ -99,10 +106,53 @@ class ChapterWriter:
                 chapter_num
             )
         
-        characters_section = self._format_characters(context.get('related_characters', []))
-        events_section = self._format_events(context.get('related_events', []))
-        entities_section = self._format_entities(related_entities)
+        # Filter entities to EXCLUDE characters already in outline (avoid duplication)
+        non_character_entities = [
+            e for e in related_entities 
+            if e.get('category') != 'characters' or e.get('name') not in outline_char_names
+        ]
+
+        # Deduplicate entities by (name, category)
+        dedup_map = {}
+        for ent in non_character_entities:
+            name_key = ent.get('name', '').strip()
+            cat_key = ent.get('category') or ent.get('type') or 'unknown'
+            if not name_key:
+                continue
+            key = (name_key.lower(), cat_key.lower())
+            # Prefer entity with richer description (longer text)
+            if key in dedup_map:
+                existing = dedup_map[key]
+                existing_desc = existing.get('description', '')
+                new_desc = ent.get('description', '')
+                # Normalize description length check (list vs str)
+                def _desc_len(d):
+                    if isinstance(d, list):
+                        return sum(len(x) for x in d)
+                    return len(d or '')
+                if _desc_len(new_desc) > _desc_len(existing_desc):
+                    dedup_map[key] = ent
+            else:
+                dedup_map[key] = ent
+
+        deduped_entities = list(dedup_map.values())
+
+        entities_section = self._format_entities(deduped_entities)
         
+        # Get events related to entities in this chapter
+        events_section = ""
+        if self.post_processor and deduped_entities:
+            # Extract entity names from deduped_entities
+            entity_names = [e.get('name', '') for e in deduped_entities if e.get('name')]
+            # Also add character names from outline
+            character_names = [c.get('name', '') for c in chapter_outline.get('characters', [])]
+            all_entity_names = list(set(entity_names + character_names))
+            
+            # Get related events (limit to 15 most important)
+            related_events = self.post_processor.get_events_by_entities(all_entity_names, max_events=15)
+            events_section = self._format_entity_events(related_events)
+        
+        # Build prompt (removed duplicate sections: characters_section, events_section)
         prompt = f"""Hãy viết nội dung chi tiết cho chương {chapter_num} dựa trên outline và ngữ cảnh sau:
 
 **OUTLINE CHƯƠNG {chapter_num}: {chapter_outline.get('title')}**
@@ -118,6 +168,9 @@ Nhân vật trong chương:
 Mâu thuẫn:
 {self._format_conflicts(chapter_outline.get('conflicts', []))}
 
+Foreshadowing (Cài cắm):
+{self._format_foreshadowing(chapter_outline.get('foreshadowing', []))}
+
 Địa điểm: {', '.join(chapter_outline.get('settings', []))}
 
 ---
@@ -130,17 +183,17 @@ Mâu thuẫn:
 
 {previous_end_section}
 
-{characters_section}
-
-{events_section}
+{next_chapter_summary}
 
 {entities_section}
 
----
+{events_section}
 
+---
 """
         
         return prompt
+    
     
     def _format_motif(self, motif: Dict[str, Any]) -> str:
         """Format motif information."""
@@ -150,6 +203,16 @@ Mâu thuẫn:
 Tiêu đề: {motif.get('title', '')}
 Mô tả: {motif.get('description', '')}
 Chủ đề: {', '.join(motif.get('themes', []))}"""
+    
+    def _format_motif_minimal(self, motif: Dict[str, Any]) -> str:
+        """Format motif information (minimized to reduce tokens)."""
+        if not motif:
+            return ""
+        desc = motif.get('description', '')
+        themes = ', '.join(motif.get('themes', []))
+        if themes:
+            return f"**Bối cảnh:** {desc} (Chủ đề: {themes})"
+        return f"**Bối cảnh:** {desc}"
     
     def _format_summaries(self, recent_summaries: List[str], super_summary: str) -> str:
         """Format summary information."""
@@ -172,6 +235,22 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
         return f"""**Kết chương trước:**
 {previous_end}"""
     
+    def _format_next_chapter_summary(self, next_chapter_outline: Optional[Dict[str, Any]]) -> str:
+        """Format next chapter summary from outline."""
+        if not next_chapter_outline:
+            return ""
+        
+        chapter_num = next_chapter_outline.get('chapter_number', '?')
+        title = next_chapter_outline.get('title', '')
+        summary = next_chapter_outline.get('summary', '')
+        
+        # Limit summary to 300 chars to avoid too much spoiler
+        summary_preview = summary
+        
+        return f"""**Tóm tắt chương tiếp theo:**
+Chương {chapter_num}: {title}
+{summary_preview}"""
+    
     def _format_characters(self, characters: List[Dict[str, Any]]) -> str:
         """Format character information."""
         if not characters:
@@ -181,7 +260,7 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
         for char in characters[:10]:
             char_info = f"- **{char.get('name', 'Unknown')}**"
             if char.get('description'):
-                char_info += f": {char.get('description', '')[:200]}"
+                char_info += f": {char.get('description', '')}"
             if char.get('cultivation_level'):
                 char_info += f" | Tu vi: {char.get('cultivation_level')}"
             char_list.append(char_info)
@@ -221,6 +300,38 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
 
         return "**Entity liên quan:**\n" + "\n".join(entity_list) if entity_list else ""
     
+    def _format_entity_events(self, events: List[Dict[str, Any]]) -> str:
+        """Format events related to entities."""
+        if not events:
+            return ""
+        
+        event_list = []
+        for e in events[:15]:  # Limit to 15 most important events
+            chapter = e.get('chapter', '?')
+            desc = e.get('description', '')
+            importance = e.get('importance', 0)
+            
+            # Include characters and entities involved for context
+            chars = e.get('characters_involved', [])
+            entities = e.get('entities_involved', [])
+            
+            event_info = f"- (c{chapter}) {desc}"
+            
+            # Add involved parties if present
+            involved = []
+            if chars:
+                involved.extend(chars[:3])  # Limit to 3 characters
+            if entities:
+                involved.extend(entities[:2])  # Limit to 2 entities
+            
+            if involved:
+                event_info += f" | Liên quan: {', '.join(involved)}"
+            
+            event_info += f" (quan trọng: {importance:.1f})"
+            event_list.append(event_info)
+        
+        return "**Các sự kiện liên quan từ các entity:**\n" + "\n".join(event_list)
+    
     def _format_key_events(self, events: List[Dict[str, Any]]) -> str:
         """Format key events from outline."""
         if not events:
@@ -248,6 +359,23 @@ Chủ đề: {', '.join(motif.get('themes', []))}"""
             return "Không có"
         return "\n".join([f"- [{c.get('timeline', 'unknown')}] {c.get('description', '')} (trạng thái: {c.get('status', 'unknown')})" 
                          for c in conflicts])
+    
+    def _format_foreshadowing(self, foreshadowing: List[Dict[str, Any]]) -> str:
+        """Format foreshadowing information from outline."""
+        if not foreshadowing:
+            return "Không có"
+        
+        foreshadowing_list = []
+        for fs in foreshadowing:
+            detail = fs.get('detail', '')
+            reveal_chapter = fs.get('reveal_chapter', '?')
+            importance = fs.get('importance', 0)
+            
+            fs_info = f"- (tiết lộ c{reveal_chapter}) {detail}"
+            fs_info += f" (quan trọng: {importance:.1f})"
+            foreshadowing_list.append(fs_info)
+        
+        return "\n".join(foreshadowing_list)
     
     def _get_entities_from_outline(self, outline_entities: List[Dict[str, Any]], chapter_num: int) -> List[Dict[str, Any]]:
         """

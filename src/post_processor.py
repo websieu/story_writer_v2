@@ -216,7 +216,7 @@ Hãy trích xuất theo định dạng JSON trên."""
 {truncated}
 
 **YÊU CẦU:**
-- Tóm tắt 150-250 từ
+- Tóm tắt 400-500 từ
 - Bao gồm các sự kiện chính
 - Nhấn mạnh điểm quan trọng
 - Không bỏ sót thông tin then chốt
@@ -273,7 +273,7 @@ Hãy viết tóm tắt."""
 {self._format_recent_summaries(recent_summaries[-5:])}
 
 **YÊU CẦU:**
-- Tóm tắt CỰC NGẮN: 100-200 từ cho toàn bộ truyện
+- Tóm tắt CỰC NGẮN: 400-500 từ cho toàn bộ truyện
 - Chỉ giữ lại thông tin cốt lõi nhất
 - Tập trung vào mạch chính, bỏ chi tiết phụ
 - Cập nhật với thông tin mới từ các chương gần đây
@@ -316,6 +316,59 @@ Hãy viết tóm tắt siêu ngắn gọn."""
         """Get unresolved conflicts by timeline."""
         return [c for c in self.conflicts 
                 if c.get('status') == 'active' and c.get('timeline') == timeline]
+    
+    def get_events_by_entities(self, entity_names: List[str], max_events: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get events related to specific entities.
+        
+        Args:
+            entity_names: List of entity names to search for
+            max_events: Maximum number of events to return (most important first)
+            
+        Returns:
+            List of events involving the specified entities
+        """
+        if not entity_names:
+            return []
+        
+        # Normalize entity names for matching
+        entity_names_lower = [name.lower() for name in entity_names]
+        
+        related_events = []
+        for event in self.events:
+            # Check if any entity is involved
+            involved = False
+            
+            # Check characters_involved
+            chars = event.get('characters_involved', [])
+            if any(char.lower() in entity_names_lower for char in chars):
+                involved = True
+            
+            # Check entities_involved
+            entities = event.get('entities_involved', [])
+            if any(entity.lower() in entity_names_lower for entity in entities):
+                involved = True
+            
+            if involved:
+                related_events.append(event)
+        
+        # Sort by importance (descending) and limit
+        related_events.sort(key=lambda x: x.get('importance', 0), reverse=True)
+        return related_events[:max_events]
+    
+    def get_events_by_chapter_range(self, start_chapter: int, end_chapter: int) -> List[Dict[str, Any]]:
+        """
+        Get all events from a range of chapters.
+        
+        Args:
+            start_chapter: Starting chapter number (inclusive)
+            end_chapter: Ending chapter number (inclusive)
+            
+        Returns:
+            List of events from the specified chapter range
+        """
+        return [e for e in self.events 
+                if start_chapter <= e.get('chapter', 0) <= end_chapter]
     
     def _load_events(self) -> List[Dict[str, Any]]:
         """Load events from file."""

@@ -1,4 +1,5 @@
 WRITING_SYSTEM_PROMPT = """
+
 ## NHIỆM VỤ
 Viết chi tiết từng chương truyện tiên hiệp theo bố cục đã cho. Mỗi chương 5.000-7.000 chữ.
 
@@ -31,28 +32,46 @@ Viết chi tiết từng chương truyện tiên hiệp theo bố cục đã cho
 - Đột nhiên mạnh lên không lý do  
 - Kẻ địch ngu để MC thắng dễ
 
-
 ### 3. MC PHẢI TRẢ GIÁ
 - Luyện hóa → Đau tột cùng, suýt chết, 3 ngày hồi phục
 - Chiến đấu → Bị thương nặng, lộ tung tích
 - Đột phá → Chống nhiễu loạn, nguy cơ tẩu hỏa
 
-### 4. KẾT NỐI CHƯƠNG TRƯỚC
+### 4. DANH XƯNG HÁN VIỆT & NGÔN NGỮ TU TIÊN
+
+#### Danh xưng BẮT BUỘC sử dụng:
+- **Tự xưng:** ta, bổn tọa, bản quân, tiểu nhân (khiêm tốn)
+- **Gọi người khác:** ngươi, các hạ, Huynh đệ, đạo hữu
+- **Gọi bậc trên:** Tiền bối, sư tôn, sư phụ, cách lão
+- **Gọi bậc dưới:** tiểu tử, tiểu nha đầu, hậu bối
+- **Cha mẹ:** phụ thân, mẫu thân, gia phụ, gia mẫu
+- **Anh chị em:** huynh trưởng, tỷ tỷ, đệ đệ, muội muội
+- **Không dùng tên các nhân vật lịch sử như: Trần Hưng Đạo, Lý Thường Kiệt **...
+
+#### ❌ TUYỆT ĐỐI KHÔNG dùng:
+- Anh, em, tao, mày, tôi, cậu, bạn, mình
+
+#### Ngôn từ tu tiên cuốn hút:
+- Dùng từ cổ phong: "thừa cơ", "lâm vào cảnh", "diệt sát", "trấn áp"
+- Thành ngữ tu tiên: "Thiên đạo vô thân", "Nhất niệm thành ma", "Thuận thiên giả sinh, nghịch thiên giả vong"
+- Câu văn uy nghi, khí thế: "Hôm nay ta định tru sát ngươi tại đây!"
+
+### 5. KẾT NỐI CHƯƠNG TRƯỚC
 Nếu có nội dung chương trước, BẮT BUỘC:
 - ✅ Kế thừa chính xác: tu vi, thương tích, vị trí, tâm lý MC
 - ✅ Mở đầu nối tiếp tự nhiên với kết chương trước
 - ✅ Không mâu thuẫn tên, địa danh, cảnh giới
 - ✅ Giữ nguyên phong cách văn
 
-### 5. CÀI CẮM – SETUP/PAYOFF BẮT BUỘC
+### 6. CÀI CẮM – SETUP/PAYOFF BẮT BUỘC
 
 * **Bất kỳ âm mưu/kế sách/thủ pháp/bảo vật/độc dược/đòn sát thủ** được **dùng ở cảnh sau** phải **được cài cắm rõ ràng ở cảnh trước** (trong **chương này** hoặc **chương trước**): miêu tả **nguồn gốc – chuẩn bị – thử nghiệm – hạn chế**.
 
-  * *Ví dụ*: Nếu “hắn lấy bột phấn trắng gây mê kẻ thù”, thì ở **phân đoạn giữa** phải có cảnh “hắn cả đêm nghiền dược, thử liều lượng, ghi chú mùi, kiểm tra sức gió…”.
+  * *Ví dụ*: Nếu "hắn lấy bột phấn trắng gây mê kẻ thù", thì ở **phân đoạn giữa** phải có cảnh "hắn cả đêm nghiền dược, thử liều lượng, ghi chú mùi, kiểm tra sức gió…".
 * **Không được phép** xuất hiện vật phẩm/kỹ năng/thông tin **ngay thời điểm dùng** nếu **chưa hề được nhắc**. Nếu thật sự cần, **bắt buộc chèn một cảnh setup sớm hơn trong chính chương** (trước khi payoff xảy ra).
 * Khi thực hiện payoff, **nhắc lại tín hiệu đã cài** (một câu, mùi, vết bột, chi tiết đạo cụ, lời dặn…); thể hiện **cái giá/hao tổn** và **rủi ro** của việc dùng nó.
 
-### 6. Cảnh giới các nhân vật phù hợp
+### 7. Cảnh giới các nhân vật phù hợp
 - Vị trí, vai trò các nhân vật phụ trong chương phải logic, phù hợp với cảnh giới đã biết.
 - Ví dụ: Nếu Nội dung đã nói trưởng lão có tu vi cảnh giới là Trúc Cơ, thì đệ tử hoặc con cháu cần có tu vi không vượt quá Trúc Cơ.
 
@@ -106,6 +125,8 @@ Chuẩn bị → Nội thị kinh mạch → Luyện hóa → Trở ngại (đau
 - [ ] 80% show, 20% tell
 - [ ] Mọi sự kiện có nhân quả
 - [ ] MC trả giá cho thành tựu
+- [ ] Danh xưng Hán Việt đúng 100%
+- [ ] Ngôn từ tu tiên cuốn hút
 - [ ] Cliffhanger đúng bố cục
 
 ## ⚠️ FORMAT OUTPUT
@@ -123,13 +144,16 @@ CHƯƠNG [SỐ]: [TÊN]
 - ❌ Ghi chú "(Đây là...)", "Số từ:..."
 - ❌ Tóm tắt thay vì viết đầy đủ
 - ❌ Hỏi lại trước khi viết
+- ❌ Dùng danh xưng hiện đại (anh/em/tao/mày)
 
 **CHỈ ĐƯỢC:**
 - ✅ 1 tiêu đề chương duy nhất
 - ✅ Văn xuôi liền mạch 5.000-7.000 chữ
 - ✅ Xuống dòng tự nhiên giữa đoạn văn
+- ✅ Danh xưng Hán Việt cổ phong
 
 ---
 
 **KHI NHẬN INPUT → VIẾT NGAY, KHÔNG HỎI, KHÔNG GIẢI THÍCH**
+
 """

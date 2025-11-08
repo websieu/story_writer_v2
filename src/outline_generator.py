@@ -217,9 +217,10 @@ Hãy phân tích và trả về JSON."""
    - Tiêu đề chương
    - Tóm tắt nội dung chính (200-300 từ)
    - Các sự kiện quan trọng (key events) - ít nhất 3-5 sự kiện
-   - Nhân vật xuất hiện và vai trò của họ
+   - Nhân vật xuất hiện và vai trò của họ. Yêu cầu tên nhân vật phong cách tu tiên Hán Việt, ví dụ: "Lăng Hàn", "Giang Phong"...
    - Mâu thuẫn được thiết lập hoặc phát triển
    - Bối cảnh, địa điểm
+   - Các tình tiết không được lặp hoặc na ná nhau 
    - Mục đích và động cơ của nhân vật chính
    - Foreshadowing (nếu có) - các chi tiết nhỏ sẽ quan trọng sau này
 
@@ -228,9 +229,13 @@ Hãy phân tích và trả về JSON."""
    - Chương 2-4: Phát triển xung đột, giới thiệu thêm nhân vật và thế lực
    - Chương 5: Cao trào nhỏ đầu tiên, mở ra hướng phát triển cho batch tiếp theo
    
-3. Cài cắm tình tiết:
-   - Một chi tiết nhỏ ở chương 2 sẽ trở thành điểm bất ngờ ở chương 5
-   - Ít nhất 2-3 điểm foreshadowing cho các batch sau
+3. Cài cắm tình tiết (Foreshadowing):
+   - QUAN TRỌNG: Foreshadowing chỉ được cài cắm trong phạm vi TỐI ĐA 2 CHAPTERS tiếp theo
+   - Ví dụ: Foreshadowing ở chương 1 sẽ xuất hiện/được giải mã ở chương 2 hoặc chương 3 (KHÔNG phải chương 4 hoặc 5)
+   - Ví dụ: Foreshadowing ở chương 3 sẽ xuất hiện/được giải mã ở chương 4 hoặc chương 5
+   - Mỗi chương nên có ít nhất 1-2 điểm foreshadowing nhỏ cho 1-2 chương sau đó
+   - hành động bên trong events các batch sau không lặp với hành động của Foreshadowing
+   
 
 4. Định nghĩa các mâu thuẫn theo timeline:
    - Immediate (1 chapter): Cần giải quyết ngay
@@ -240,6 +245,14 @@ Hãy phân tích và trả về JSON."""
    - Long-term (100 chapters): Cốt truyện dài hạn
    - Epic (300 chapters): Mâu thuẫn xuyên suốt toàn bộ truyện
 
+**LƯU Ý VỀ FORESHADOWING:**
+- Chương 1: reveal_chapter chỉ có thể là 2 hoặc 3
+- Chương 2: reveal_chapter chỉ có thể là 3 hoặc 4
+- Chương 3: reveal_chapter chỉ có thể là 4 hoặc 5
+- Chương 4: reveal_chapter chỉ có thể là 5 hoặc 6
+- Chương 5: reveal_chapter chỉ có thể là 6 hoặc 7
+***Lưu ý về tên MC/các nhân vật:**
+- Không dùng tên các nhân vật lịch sử như: Trần Hưng Đạo, Lý Thường Kiệt, Võ Tánh, Nguyễn Huệ, v.v.
 **ĐỊNH DẠNG OUTPUT (JSON):**
 
 ```json
@@ -271,7 +284,11 @@ Hãy phân tích và trả về JSON."""
       ],
       "settings": ["Địa điểm 1", "Địa điểm 2"],
       "foreshadowing": [
-        {{"detail": "Chi tiết cài cắm", "reveal_chapter": 5, "importance": 0.8}}
+        {{
+          "detail": "Chi tiết cài cắm (mô tả ngắn gọn)", 
+          "reveal_chapter": <số chương sẽ xuất hiện/giải mã (PHẢI trong khoảng +1 đến +2 chương)>,
+          "importance": 0.8
+        }}
       ]
     }}
   ]

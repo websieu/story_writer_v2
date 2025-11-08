@@ -25,7 +25,7 @@ cost_tracking:
 # Task-specific LLM configurations
 task_configs:
   outline_generation:
-    model: "gemini-2.5-flash"
+    model: "gemini-2.5-pro"
     temperature: 0.8
     max_tokens: 4000
     

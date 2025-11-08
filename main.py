@@ -67,20 +67,21 @@ class StoryGenerator:
             self.config,
             self.paths
         )
-        self.chapter_writer = ChapterWriter(
-            self.llm_client,
-            self.checkpoint,
-            self.logger,
-            self.config,
-            self.entity_manager,
-            self.paths
-        )
         self.post_processor = PostChapterProcessor(
             self.llm_client,
             self.checkpoint,
             self.logger,
             self.config,
             self.paths
+        )
+        self.chapter_writer = ChapterWriter(
+            self.llm_client,
+            self.checkpoint,
+            self.logger,
+            self.config,
+            self.entity_manager,
+            self.paths,
+            self.post_processor
         )
         
         # Inject dependencies into outline_generator
@@ -146,19 +147,21 @@ class StoryGenerator:
         self.entity_manager.extract_entities_from_outlines(outlines, batch_num)
         
         # Step 5: Write each chapter
-        for chapter_outline in outlines:
+        for i, chapter_outline in enumerate(outlines):
             chapter_num = chapter_outline.get('chapter_number')
-            self._generate_chapter(chapter_num, chapter_outline, motif)
+            # Get next chapter outline if exists
+            next_chapter_outline = outlines[i + 1] if i + 1 < len(outlines) else None
+            self._generate_chapter(chapter_num, chapter_outline, motif, next_chapter_outline)
         
         self.logger.info(f"=== Batch {batch_num} completed ===")
     
     def _generate_chapter(self, chapter_num: int, chapter_outline: Dict[str, Any],
-                         motif: Dict[str, Any]):
+                         motif: Dict[str, Any], next_chapter_outline: Optional[Dict[str, Any]] = None):
         """Generate a single chapter with all processing."""
         self.logger.info(f"--- Generating Chapter {chapter_num}: {chapter_outline.get('title')} ---")
         
         # Prepare context for chapter writing
-        context = self._prepare_chapter_context(chapter_num, chapter_outline, motif)
+        context = self._prepare_chapter_context(chapter_num, chapter_outline, motif, next_chapter_outline)
         
         # Write chapter
         chapter_content = self.chapter_writer.write_chapter(chapter_outline, context)
@@ -181,7 +184,7 @@ class StoryGenerator:
         self.logger.info(f"--- Chapter {chapter_num} completed ---")
     
     def _prepare_chapter_context(self, chapter_num: int, chapter_outline: Dict[str, Any],
-                                 motif: Dict[str, Any]) -> Dict[str, Any]:
+                                 motif: Dict[str, Any], next_chapter_outline: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Prepare context for chapter writing."""
         # Get relevant entities
         related_entities = self.entity_manager.get_relevant_entities(chapter_outline)
@@ -214,7 +217,8 @@ class StoryGenerator:
             'related_events': related_events,
             'recent_summaries': recent_summaries,
             'super_summary': super_summary,
-            'previous_chapter_end': previous_chapter_end
+            'previous_chapter_end': previous_chapter_end,
+            'next_chapter_outline': next_chapter_outline  # Add next chapter outline for context
         }
     
     def _prepare_batch_context(self, batch_num: int, user_suggestions: Optional[str] = None) -> Dict[str, Any]:
