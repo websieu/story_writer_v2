@@ -299,12 +299,15 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
         
         return prompt
     
-    def _create_continuation_outline_prompt(self, batch_num: int, context: Dict[str, Any], 
+    def _create_continuation_outline_prompt(self, batch_num: int, context: Dict[str, Any],
                                            conflict_plan: Dict[str, Any]) -> str:
         """Create prompt for continuation outline generation."""
         start_chapter = (batch_num - 1) * self.chapters_per_batch + 1
         end_chapter = start_chapter + self.chapters_per_batch - 1
-        
+
+        # Determine pacing for this batch
+        pacing_directive = self._get_pacing_directive(batch_num)
+
         prompt = f"""Hãy tạo outline cho 5 chương tiếp theo (Chương {start_chapter}-{end_chapter}) dựa trên ngữ cảnh sau:
 
 **NGỮ CẢNH HIỆN TẠI:**
@@ -338,6 +341,9 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
 **Gợi ý từ người dùng:**
 {context.get('user_suggestions', 'Không có')}
 
+**NHỊP TRUYỆN VÀ PHONG CÁCH CHO BATCH NÀY:**
+{pacing_directive}
+
 **YÊU CẦU:**
 
 1. Phải xử lý các mâu thuẫn theo kế hoạch đã phân tích ở trên
@@ -345,6 +351,7 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
 3. Tạo sự liên kết chặt chẽ giữa các chương
 4. Cài cắm foreshadowing cho các batch sau
 5. Xác định rõ mục đích, động cơ của nhân vật chính trong mỗi chương
+6. **Tuân thủ nhịp truyện và phong cách được chỉ định ở trên**
 
 **LƯU Ý QUAN TRỌNG:**
 - Mỗi chapter outline PHẢI có field "conflict_ids": danh sách ID các mâu thuẫn được đề cập/xử lý trong chương đó
@@ -493,7 +500,90 @@ Hãy tạo outline theo đúng định dạng JSON trên."""
             text += f"  Lý do: {c.get('reason', '')}"
             result.append(text)
         return "\n\n".join(result)
-    
+
+    def _get_pacing_directive(self, batch_num: int) -> str:
+        """
+        Determine pacing and style directives for this batch.
+
+        Uses cyclic pacing pattern and randomized style elements.
+        """
+        import random
+
+        # Get pacing configuration
+        pacing_config = self.config.get('pacing', {})
+        patterns = pacing_config.get('patterns', [])
+        style_elements = pacing_config.get('style_elements', {})
+
+        if not patterns:
+            return "Nhịp cân bằng: Kết hợp hành động và phát triển nhân vật"
+
+        # Calculate which pattern to use based on cycle
+        total_duration = sum(p['duration_batches'] for p in patterns)
+        cycle_position = (batch_num - 1) % total_duration
+
+        # Find current pattern
+        cumulative = 0
+        current_pattern = patterns[0]  # default
+        for pattern in patterns:
+            cumulative += pattern['duration_batches']
+            if cycle_position < cumulative:
+                current_pattern = pattern
+                break
+
+        pacing_type = current_pattern['type']
+        pacing_desc = current_pattern['description']
+
+        # Build pacing directive
+        directive = f"**Nhịp độ:** {pacing_desc}\n\n"
+
+        # Add specific directives based on pacing type
+        if pacing_type == "fast":
+            directive += """**Hướng dẫn chi tiết:**
+- Tập trung vào hành động: chiến đấu, rượt đuổi, khủng hoảng
+- Mỗi chương nên có 2-3 cảnh action mạnh
+- Giảm thiểu cảnh tu luyện tĩnh, ưu tiên đột phá trong chiến đấu
+- Tạo cảm giác cấp bách, nguy hiểm liên tục
+- Cliffhanger mạnh ở cuối mỗi chương
+
+"""
+        elif pacing_type == "slow":
+            directive += """**Hướng dẫn chi tiết:**
+- Tập trung vào phát triển nhân vật và tu luyện
+- Mỗi chương nên có 1-2 cảnh tu luyện/lĩnh ngộ sâu sắc
+- Xây dựng mối quan hệ giữa các nhân vật
+- Giải mã bí ẩn, khám phá lore của thế giới
+- Chuẩn bị nền tảng cho arc tiếp theo
+
+"""
+        else:  # mixed
+            directive += """**Hướng dẫn chi tiết:**
+- Cân bằng giữa hành động và phát triển
+- Xen kẽ cảnh chiến đấu với cảnh tu luyện
+- Vừa giải quyết mâu thuẫn vừa tạo mâu thuẫn mới
+- Kết hợp nhiều yếu tố: hành động, tình cảm, chiến thuật
+
+"""
+
+        # Add style elements (with probability)
+        style_notes = []
+
+        if random.random() < style_elements.get('humor', 0):
+            style_notes.append("- Thêm yếu tố HÀI HƯỚC: Tình huống hài, nhân vật phụ hài hước, phản ứng bất ngờ của MC")
+
+        if random.random() < style_elements.get('romance', 0):
+            style_notes.append("- Thêm yếu tố TÌNH CẢM: Phát triển mối quan hệ nam-nữ, tương tác ngọt ngào, misunderstanding")
+
+        if random.random() < style_elements.get('face_slapping', 0):
+            style_notes.append("- Thêm yếu tố DIỆT TIỂU NHÂN: MC đối mặt kẻ khinh thường, phản đánh mạnh, làm bẽ mặt kẻ thù")
+
+        if random.random() < style_elements.get('mystery', 0):
+            style_notes.append("- Thêm yếu tố BÍ ẨN: Âm mưu ngầm, manh mối bí ẩn, thế lực ẩn danh")
+
+        if style_notes:
+            directive += "**Phong cách bổ sung:**\n" + "\n".join(style_notes) + "\n"
+
+        return directive
+
     def _parse_outline_response(self, response: str, batch_num: int) -> List[Dict[str, Any]]:
         """Parse LLM response to extract outline."""
         try:

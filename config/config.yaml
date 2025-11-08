@@ -67,6 +67,29 @@ story:
   entity_pruning_threshold: 50  # Archive entities not used in last N chapters
   event_relevance_window: 30  # Only keep events from last N chapters in active memory
 
+# Pacing & Style Management
+pacing:
+  # Pacing patterns cycle through story
+  patterns:
+    - type: "fast"  # Fast pacing: action, combat, crisis
+      description: "Nhịp nhanh: Hành động liên tục, chiến đấu, khủng hoảng"
+      duration_batches: 2  # 2 batches (10 chapters)
+
+    - type: "slow"  # Slow pacing: cultivation, character development, mystery
+      description: "Nhịp chậm: Tu luyện, phát triển nhân vật, giải mã bí ẩn"
+      duration_batches: 1  # 1 batch (5 chapters)
+
+    - type: "mixed"  # Mixed: balance of action and development
+      description: "Nhịp hỗn hợp: Cân bằng hành động và phát triển"
+      duration_batches: 1
+
+  # Style elements to vary
+  style_elements:
+    humor: 0.3  # Probability of humorous elements (30%)
+    romance: 0.2  # Probability of romantic subplot (20%)
+    face_slapping: 0.4  # Probability of "diệt tiểu nhân" (40%)
+    mystery: 0.3  # Probability of mystery/conspiracy (30%)
+
 # File Paths
 # All project data will be stored in projects/{project_id}/
 paths:
