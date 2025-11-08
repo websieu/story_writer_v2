@@ -290,12 +290,12 @@ Chương {chapter_num}: {title}
             desc = e.get('description', '')
             if isinstance(desc, list):
                 # Join all descriptions with "; " separator
-                desc_text = "; ".join(desc) if desc else ""
+                desc_text = "; ".join(desc[-10:]) if desc else ""
             else:
                 desc_text = desc
 
             if desc_text:
-                entity_info += f": {desc_text[:150]}"
+                entity_info += f": {desc_text}"
             entity_list.append(entity_info)
 
         return "**Entity liên quan:**\n" + "\n".join(entity_list) if entity_list else ""

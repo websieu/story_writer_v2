@@ -219,6 +219,7 @@ Hãy trích xuất theo định dạng JSON trên."""
 - Tóm tắt 400-500 từ
 - Bao gồm các sự kiện chính
 - Nhấn mạnh điểm quan trọng
+- Ghi rõ cảnh giới nhân vật.
 - Không bỏ sót thông tin then chốt
 
 Hãy viết tóm tắt."""
@@ -276,6 +277,7 @@ Hãy viết tóm tắt."""
 - Tóm tắt CỰC NGẮN: 400-500 từ cho toàn bộ truyện
 - Chỉ giữ lại thông tin cốt lõi nhất
 - Tập trung vào mạch chính, bỏ chi tiết phụ
+- Ghi rõ cảnh giới nhân vật.
 - Cập nhật với thông tin mới từ các chương gần đây
 
 Hãy viết tóm tắt siêu ngắn gọn."""

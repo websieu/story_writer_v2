@@ -217,7 +217,7 @@ Hãy phân tích và trả về JSON."""
    - Tiêu đề chương
    - Tóm tắt nội dung chính (200-300 từ)
    - Các sự kiện quan trọng (key events) - ít nhất 3-5 sự kiện
-   - Nhân vật xuất hiện và vai trò của họ. Yêu cầu tên nhân vật phong cách tu tiên Hán Việt, ví dụ: "Lăng Hàn", "Giang Phong"...
+   - Nhân vật xuất hiện, cảnh giới và vai trò của họ. Yêu cầu tên nhân vật phong cách tu tiên Hán Việt, ví dụ: "Lăng Hàn", "Giang Phong"...
    - Mâu thuẫn được thiết lập hoặc phát triển
    - Bối cảnh, địa điểm
    - Các tình tiết không được lặp hoặc na ná nhau 
