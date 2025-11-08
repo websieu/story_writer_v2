@@ -19,11 +19,21 @@ class PostChapterProcessor:
         self.events_file = os.path.join(paths['events_dir'], 'events.json')
         self.conflicts_file = os.path.join(paths['conflicts_dir'], 'conflicts.json')
         self.summaries_file = os.path.join(paths['summaries_dir'], 'summaries.json')
-        
+        self.arc_summaries_file = os.path.join(paths['summaries_dir'], 'arc_summaries.json')
+
         # Load existing data
         self.events = self._load_events()
         self.conflicts = self._load_conflicts()
         self.summaries = self._load_summaries()
+        self.arc_summaries = self._load_arc_summaries()
+
+        # OPTIMIZATION: Build chapter-based index for faster event lookup
+        self._events_by_chapter_cache = {}
+        self._rebuild_event_cache()
+
+        # OPTIMIZATION: Settings for 300-chapter novels
+        self.chapters_per_arc = config.get('story', {}).get('chapters_per_arc', 50)
+        self.event_relevance_window = config.get('story', {}).get('event_relevance_window', 30)
     
     def process_chapter(self, chapter_content: str, chapter_num: int) -> Dict[str, Any]:
         """
@@ -246,62 +256,170 @@ Hãy viết tóm tắt."""
         return summary
     
     def update_super_summary(self, chapter_num: int) -> str:
-        """Update super summary of entire story so far."""
+        """
+        Update super summary of entire story so far.
+
+        OPTIMIZATION: For 300-chapter novels, uses hierarchical summary strategy:
+        - Arc summaries (every 50 chapters)
+        - Super summary combines arc summaries + recent chapters
+        """
         step_name = f"super_summary_update_{chapter_num}"
-        
+
         if self.checkpoint.is_step_completed(step_name, chapter=chapter_num):
             self.logger.info(f"Super summary already updated for chapter {chapter_num}")
             metadata = self.checkpoint.get_step_metadata(step_name, chapter=chapter_num)
             return metadata.get('super_summary', '') if metadata else ''
-        
+
         self.logger.info(f"Updating super summary up to chapter {chapter_num}")
-        
-        # Get all summaries up to this chapter
-        recent_summaries = [s['summary'] for s in self.summaries if s['chapter'] <= chapter_num]
-        
+
+        # OPTIMIZATION: Check if we just completed an arc (every chapters_per_arc chapters)
+        if chapter_num % self.chapters_per_arc == 0:
+            self._generate_arc_summary(chapter_num)
+
+        # Get recent summaries (last 10 chapters only to save tokens)
+        recent_summaries = [s['summary'] for s in self.summaries
+                           if s['chapter'] <= chapter_num and s['chapter'] > chapter_num - 10]
+
         if not recent_summaries:
             return ""
-        
+
         # Get previous super summary
         prev_super = self.checkpoint.get_metadata('super_summary', '')
-        
+
+        # OPTIMIZATION: Get arc summaries for hierarchical context
+        arc_summary_text = self._format_arc_summaries(chapter_num)
+
         prompt = f"""Hãy tạo tóm tắt SIÊU NGẮN GỌN cho toàn bộ truyện từ đầu đến chương {chapter_num}.
 
-**TÓM TẮT CŨ (nếu có):**
+**TÓM TẮT THEO ARC (các giai đoạn lớn):**
+{arc_summary_text if arc_summary_text else "Chưa có"}
+
+**TÓM TẮT CŨ:**
 {prev_super if prev_super else "Chưa có"}
 
-**TÓM TẮT CÁC CHƯƠNG GẦN ĐÂY:**
-{self._format_recent_summaries(recent_summaries[-5:])}
+**TÓM TẮT CÁC CHƯƠNG GẦN ĐÂY (10 chương gần nhất):**
+{self._format_recent_summaries(recent_summaries)}
 
 **YÊU CẦU:**
 - Tóm tắt CỰC NGẮN: 400-500 từ cho toàn bộ truyện
-- Chỉ giữ lại thông tin cốt lõi nhất
+- Ưu tiên thông tin từ arc summaries (tóm tắt các giai đoạn lớn)
+- Kết hợp với thông tin mới từ các chương gần đây
+- Ghi rõ cảnh giới nhân vật hiện tại
 - Tập trung vào mạch chính, bỏ chi tiết phụ
-- Ghi rõ cảnh giới nhân vật.
-- Cập nhật với thông tin mới từ các chương gần đây
 
 Hãy viết tóm tắt siêu ngắn gọn."""
-        
+
         result = self.llm_client.call(
             prompt=prompt,
             task_name="summary_generation",
             system_message="Bạn là chuyên gia tóm tắt, có khả năng nắm bắt cốt lõi.",
             chapter_id=chapter_num
         )
-        
+
         super_summary = result['response'].strip()
-        
+
         # Save to metadata
         self.checkpoint.set_metadata('super_summary', super_summary)
-        
+
         # Mark completed
         self.checkpoint.mark_step_completed(
-            step_name, 
+            step_name,
             chapter=chapter_num,
             metadata={'super_summary': super_summary}
         )
-        
+
         return super_summary
+
+    def _generate_arc_summary(self, chapter_num: int):
+        """
+        Generate summary for a completed arc (e.g., chapters 1-50, 51-100, etc.).
+
+        OPTIMIZATION: Arc summaries provide hierarchical context for 300-chapter novels.
+        """
+        arc_number = chapter_num // self.chapters_per_arc
+        start_chapter = (arc_number - 1) * self.chapters_per_arc + 1
+        end_chapter = chapter_num
+
+        self.logger.info(f"Generating arc {arc_number} summary (chapters {start_chapter}-{end_chapter})")
+
+        # Get all summaries for this arc
+        arc_chapter_summaries = [s['summary'] for s in self.summaries
+                                if start_chapter <= s['chapter'] <= end_chapter]
+
+        if not arc_chapter_summaries:
+            return
+
+        # Combine summaries in chunks (every 10 chapters)
+        chunk_size = 10
+        chunk_summaries = []
+        for i in range(0, len(arc_chapter_summaries), chunk_size):
+            chunk = arc_chapter_summaries[i:i+chunk_size]
+            chunk_start = start_chapter + i
+            chunk_end = min(start_chapter + i + chunk_size - 1, end_chapter)
+            chunk_summaries.append(f"Chương {chunk_start}-{chunk_end}: {' '.join(chunk)}")
+
+        prompt = f"""Hãy tạo tóm tắt cho Arc {arc_number} (Chương {start_chapter}-{end_chapter}).
+
+**TÓM TẮT CÁC ĐOẠN:**
+{chr(10).join(chunk_summaries)}
+
+**YÊU CẦU:**
+- Tóm tắt 300-400 từ cho toàn bộ arc
+- Nêu rõ:
+  + Mục tiêu/nhiệm vụ chính của arc
+  + Thành tựu/đột phá của nhân vật chính
+  + Cảnh giới tu luyện đạt được
+  + Mâu thuẫn chính được giải quyết
+  + Mâu thuẫn mới phát sinh (dẫn đến arc sau)
+- Tập trung vào mạch chính
+
+Hãy viết tóm tắt arc."""
+
+        result = self.llm_client.call(
+            prompt=prompt,
+            task_name="summary_generation",
+            system_message="Bạn là chuyên gia tóm tắt cốt truyện dài.",
+            chapter_id=chapter_num
+        )
+
+        arc_summary = {
+            'arc_number': arc_number,
+            'start_chapter': start_chapter,
+            'end_chapter': end_chapter,
+            'summary': result['response'].strip()
+        }
+
+        self.arc_summaries.append(arc_summary)
+        self._save_arc_summaries()
+
+        self.logger.info(f"Arc {arc_number} summary generated")
+
+    def _format_arc_summaries(self, current_chapter: int) -> str:
+        """Format arc summaries for prompt."""
+        if not self.arc_summaries:
+            return ""
+
+        # Only include completed arcs
+        relevant_arcs = [a for a in self.arc_summaries if a['end_chapter'] <= current_chapter]
+
+        if not relevant_arcs:
+            return ""
+
+        formatted = []
+        for arc in relevant_arcs:
+            formatted.append(f"**Arc {arc['arc_number']} (Ch{arc['start_chapter']}-{arc['end_chapter']}):**\n{arc['summary']}")
+
+        return "\n\n".join(formatted)
+
+    def _load_arc_summaries(self) -> List[Dict[str, Any]]:
+        """Load arc summaries from file."""
+        if os.path.exists(self.arc_summaries_file):
+            return load_json(self.arc_summaries_file)
+        return []
+
+    def _save_arc_summaries(self):
+        """Save arc summaries to file."""
+        save_json(self.arc_summaries, self.arc_summaries_file)
     
     def get_recent_summaries(self, count: int = 2) -> List[str]:
         """Get N most recent chapter summaries."""
@@ -319,41 +437,53 @@ Hãy viết tóm tắt siêu ngắn gọn."""
         return [c for c in self.conflicts 
                 if c.get('status') == 'active' and c.get('timeline') == timeline]
     
-    def get_events_by_entities(self, entity_names: List[str], max_events: int = 10) -> List[Dict[str, Any]]:
+    def get_events_by_entities(self, entity_names: List[str], max_events: int = 10,
+                               recent_chapters_only: int = None) -> List[Dict[str, Any]]:
         """
         Get events related to specific entities.
-        
+
         Args:
             entity_names: List of entity names to search for
             max_events: Maximum number of events to return (most important first)
-            
+            recent_chapters_only: If set, only search events from last N chapters (OPTIMIZATION)
+
         Returns:
             List of events involving the specified entities
         """
         if not entity_names:
             return []
-        
-        # Normalize entity names for matching
-        entity_names_lower = [name.lower() for name in entity_names]
-        
+
+        # BUG FIX: Normalize entity names for case-insensitive matching
+        entity_names_lower = set(name.lower() for name in entity_names if name)
+
+        # OPTIMIZATION: If recent_chapters_only is set, only search recent chapters
+        if recent_chapters_only and self._events_by_chapter_cache:
+            # Get max chapter number
+            max_chapter = max(self._events_by_chapter_cache.keys()) if self._events_by_chapter_cache else 0
+            min_chapter = max(1, max_chapter - recent_chapters_only + 1)
+
+            # Only search events from recent chapters
+            events_to_search = []
+            for chapter in range(min_chapter, max_chapter + 1):
+                events_to_search.extend(self._events_by_chapter_cache.get(chapter, []))
+        else:
+            events_to_search = self.events
+
         related_events = []
-        for event in self.events:
-            # Check if any entity is involved
-            involved = False
-            
-            # Check characters_involved
+        for event in events_to_search:
+            # OPTIMIZATION: Use set intersection for faster matching
+            # Check characters_involved (case-insensitive)
             chars = event.get('characters_involved', [])
-            if any(char.lower() in entity_names_lower for char in chars):
-                involved = True
-            
-            # Check entities_involved
+            chars_lower = set(char.lower() for char in chars if char)
+
+            # Check entities_involved (case-insensitive)
             entities = event.get('entities_involved', [])
-            if any(entity.lower() in entity_names_lower for entity in entities):
-                involved = True
-            
-            if involved:
+            entities_lower = set(entity.lower() for entity in entities if entity)
+
+            # Check if any intersection exists
+            if entity_names_lower & (chars_lower | entities_lower):
                 related_events.append(event)
-        
+
         # Sort by importance (descending) and limit
         related_events.sort(key=lambda x: x.get('importance', 0), reverse=True)
         return related_events[:max_events]
@@ -381,6 +511,17 @@ Hãy viết tóm tắt siêu ngắn gọn."""
     def _save_events(self):
         """Save events to file."""
         save_json(self.events, self.events_file)
+        # OPTIMIZATION: Rebuild cache after saving
+        self._rebuild_event_cache()
+
+    def _rebuild_event_cache(self):
+        """OPTIMIZATION: Rebuild chapter-based event cache for faster lookup."""
+        self._events_by_chapter_cache = {}
+        for event in self.events:
+            chapter = event.get('chapter', 0)
+            if chapter not in self._events_by_chapter_cache:
+                self._events_by_chapter_cache[chapter] = []
+            self._events_by_chapter_cache[chapter].append(event)
     
     def _load_conflicts(self) -> List[Dict[str, Any]]:
         """Load conflicts from file."""

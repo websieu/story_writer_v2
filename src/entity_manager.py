@@ -38,21 +38,21 @@ class EntityManager:
     def extract_entities_from_outlines(self, outlines: List[Dict[str, Any]], batch_num: int) -> Dict[str, List[Dict[str, Any]]]:
         """
         Extract entities from batch outlines.
-        
+
         Returns dictionary with entity categories.
         """
         step_name = f"entity_extraction_batch_{batch_num}"
-        
+
         # Check checkpoint
         if self.checkpoint.is_step_completed(step_name, batch=batch_num):
             self.logger.info(f"Entities for batch {batch_num} already extracted")
             return self.entities
-        
+
         self.logger.info(f"Extracting entities from batch {batch_num} outlines")
-        
+
         # Create prompt
         prompt = self._create_extraction_prompt(outlines)
-        
+
         system_message = SYSTEM_ENTITY_EXTRACTOR_OUTLINE
         # Call LLM with batch_id
         result = self.llm_client.call(
@@ -61,26 +61,66 @@ class EntityManager:
             system_message=system_message,
             batch_id=batch_num
         )
-        
+
         # Parse entities
         new_entities = self._parse_entity_response(result['response'])
-        
+
+        # BUG FIX: Add chapter metadata to entities from outlines
+        # Map entities to chapters where they appear based on outline data
+        for category, entities in new_entities.items():
+            for entity in entities:
+                # Find which chapters this entity appears in from outlines
+                entity_chapters = []
+                entity_name = entity.get('name', '').lower()
+
+                for outline in outlines:
+                    chapter_num = outline.get('chapter_number')
+
+                    # Check if entity appears in this chapter's outline
+                    # Check characters
+                    for char in outline.get('characters', []):
+                        if char.get('name', '').lower() == entity_name:
+                            entity_chapters.append(chapter_num)
+                            break
+
+                    # Check entities mentioned in key_events
+                    for event in outline.get('key_events', []):
+                        event_text = str(event).lower()
+                        if entity_name in event_text:
+                            entity_chapters.append(chapter_num)
+                            break
+
+                    # Check settings for locations
+                    if category == 'locations':
+                        for setting in outline.get('settings', []):
+                            if entity_name in setting.lower():
+                                entity_chapters.append(chapter_num)
+                                break
+
+                # Set appear_in_chapters if we found any
+                if entity_chapters:
+                    entity['appear_in_chapters'] = sorted(list(set(entity_chapters)))
+                else:
+                    # If not explicitly found, assume it appears in all chapters of this batch
+                    batch_chapters = [o.get('chapter_number') for o in outlines]
+                    entity['appear_in_chapters'] = batch_chapters
+
         # Save entities for this batch (before merging)
         self._save_batch_entities(new_entities, batch_num)
-        
+
         # Merge with existing entities
         self._merge_entities(new_entities)
-        
+
         # Save entities
         self._save_entities()
-        
+
         # Mark as completed
         self.checkpoint.mark_step_completed(
             step_name,
             batch=batch_num,
             metadata={'total_entities': self._count_entities()}
         )
-        
+
         return self.entities
     
     def extract_entities_from_chapter(self, chapter_content: str, chapter_num: int) -> Dict[str, List[Dict[str, Any]]]:
@@ -138,55 +178,95 @@ class EntityManager:
         
         return new_entities
     
-    def get_relevant_entities(self, chapter_outline: Dict[str, Any], 
+    def get_relevant_entities(self, chapter_outline: Dict[str, Any],
                              max_entities: int = 20) -> List[Dict[str, Any]]:
         """
         Get entities relevant to a specific chapter outline.
-        
+
         Uses character names, settings, and conflicts to find relevant entities.
-        Filters entities by appear_in_chapters for better accuracy.
+        Filters entities by appear_in_chapters and scores by relevance.
+
+        OPTIMIZATION: Adds relevance scoring to prioritize most important entities.
         """
-        relevant = []
         chapter_num = chapter_outline.get('chapter_number', 0)
-        
+
         # Get character names from outline
         character_names = [c.get('name', '') for c in chapter_outline.get('characters', [])]
+        character_names_lower = [n.lower() for n in character_names if n]
         settings = chapter_outline.get('settings', [])
-        
-        # Add characters that appear in this chapter
+
+        # OPTIMIZATION: Build candidates list with relevance scores
+        candidates = []
+
+        # Add characters that appear in this chapter (highest priority)
         for char in self.entities.get('characters', []):
-            if char.get('name') in character_names:
-                # Filter by appear_in_chapters
+            char_name = char.get('name', '')
+            if char_name in character_names:
                 if self._entity_appears_in_chapter(char, chapter_num):
-                    relevant.append(char)
-        
-        # Extract location keywords from settings (settings are full description strings)
+                    # High relevance for mentioned characters
+                    candidates.append({
+                        'entity': {**char, 'category': 'characters'},
+                        'relevance': 10.0
+                    })
+
+        # Extract location keywords from settings
         location_keywords = []
         for setting in settings:
-            # Extract capitalized words as potential location names
             words = setting.split()
             location_keywords.extend([w.strip(',.;:') for w in words if w and w[0].isupper()])
-        
-        # Add locations mentioned in settings
+        location_keywords_lower = [kw.lower() for kw in location_keywords]
+
+        # Add locations mentioned in settings (medium-high priority)
         for loc in self.entities.get('locations', []):
-            loc_name = loc.get('name', '')
-            # Check if any keyword matches location name (both directions)
-            if any(keyword in loc_name or loc_name in keyword for keyword in location_keywords):
-                if self._entity_appears_in_chapter(loc, chapter_num):
-                    relevant.append(loc)
-        
-        # Add other entities that appear in this chapter
-        # Filter by appear_in_chapters instead of relying on associated_characters
+            if self._entity_appears_in_chapter(loc, chapter_num):
+                loc_name = loc.get('name', '')
+                loc_name_lower = loc_name.lower()
+
+                # Check keyword match
+                match_score = 0
+                for keyword in location_keywords_lower:
+                    if keyword in loc_name_lower or loc_name_lower in keyword:
+                        match_score = 7.0
+                        break
+
+                if match_score > 0:
+                    candidates.append({
+                        'entity': {**loc, 'category': 'locations'},
+                        'relevance': match_score
+                    })
+
+        # OPTIMIZATION: Add other entities with relevance scoring
         for entity_type in ['items', 'techniques', 'spiritual_herbs', 'beasts', 'factions', 'other']:
             for entity in self.entities.get(entity_type, []):
                 if self._entity_appears_in_chapter(entity, chapter_num):
-                    # Optionally also check associated_characters for extra filtering
+                    # Calculate relevance based on associated characters
                     associated = entity.get('associated_characters', [])
-                    if not associated or any(name in associated for name in character_names):
-                        relevant.append(entity)
-                        relevant.append(entity)
-        
-        return relevant[:max_entities]
+                    associated_lower = [a.lower() for a in associated if a]
+
+                    relevance = 1.0  # Base relevance
+
+                    # Boost relevance if associated with chapter characters
+                    if associated_lower:
+                        matches = sum(1 for char in character_names_lower if char in associated_lower)
+                        if matches > 0:
+                            relevance = 5.0 + matches
+                        else:
+                            # If has associated chars but not in this chapter, lower priority
+                            relevance = 0.5
+                    else:
+                        # If no associated characters, medium priority
+                        relevance = 3.0
+
+                    candidates.append({
+                        'entity': {**entity, 'category': entity_type},
+                        'relevance': relevance
+                    })
+
+        # OPTIMIZATION: Sort by relevance and return top entities
+        candidates.sort(key=lambda x: x['relevance'], reverse=True)
+        relevant = [c['entity'] for c in candidates[:max_entities]]
+
+        return relevant
     
     def _create_extraction_prompt(self, outlines: List[Dict[str, Any]]) -> str:
         """Create prompt for entity extraction from outlines."""
@@ -370,18 +450,24 @@ class EntityManager:
     def _entity_appears_in_chapter(self, entity: Dict[str, Any], chapter_num: int) -> bool:
         """
         Check if entity appears in given chapter.
-        
+
         Args:
             entity: Entity dict with optional 'appear_in_chapters' field
             chapter_num: Chapter number to check
-            
+
         Returns:
-            True if entity has appear_in_chapters field and chapter_num is in it
+            True if entity has appear_in_chapters field and chapter_num is in it,
+            or if appear_in_chapters is None/missing (backward compatibility for old entities)
         """
         appear_in = entity.get('appear_in_chapters')
-        # Only include entities that explicitly have chapter metadata
-        # Entities without this field are from chapter extraction and shouldn't appear everywhere
-        return appear_in is not None and chapter_num in appear_in
+
+        # BUG FIX: If appear_in_chapters is not set, assume entity is available
+        # This handles backward compatibility and entities that should be globally available
+        if appear_in is None:
+            return True
+
+        # If appear_in_chapters is set, check if chapter_num is in it
+        return chapter_num in appear_in
     
     def get_entities_by_chapter(self, chapter_num: int, 
                                 entity_types: Optional[List[str]] = None) -> Dict[str, List[Dict[str, Any]]]:

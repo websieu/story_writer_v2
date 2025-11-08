@@ -258,16 +258,21 @@ class StoryGenerator:
             key=lambda x: x.get('importance', 0),
             reverse=True
         )
-        
+
         # Filter by characters involved
         character_names = [c.get('name') for c in chapter_outline.get('characters', [])]
+        # BUG FIX: Use case-insensitive matching
+        character_names_lower = [name.lower() for name in character_names if name]
         relevant = []
-        
+
         for event in all_events:
             characters_involved = event.get('characters_involved', [])
-            if any(char in characters_involved for char in character_names):
+            characters_involved_lower = [char.lower() for char in characters_involved if char]
+
+            # BUG FIX: Case-insensitive matching
+            if any(char_lower in characters_involved_lower for char_lower in character_names_lower):
                 relevant.append(event)
-        
+
         return relevant[:10]  # Top 10 relevant events
     
     def _get_top_characters(self, limit: int = 15) -> List[Dict[str, Any]]:

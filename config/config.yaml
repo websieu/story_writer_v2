@@ -61,6 +61,12 @@ story:
   last_chapter_context_chars: 1000
   max_chars_for_llm: 30000  # Maximum characters to send to LLM for processing (to avoid token limits)
 
+  # OPTIMIZATION: Settings for 300-chapter novels
+  total_chapters: 300  # Target total chapters
+  chapters_per_arc: 50  # Divide story into arcs (300 / 50 = 6 arcs)
+  entity_pruning_threshold: 50  # Archive entities not used in last N chapters
+  event_relevance_window: 30  # Only keep events from last N chapters in active memory
+
 # File Paths
 # All project data will be stored in projects/{project_id}/
 paths:

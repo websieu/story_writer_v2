@@ -137,9 +137,11 @@ class ChapterWriter:
 
         deduped_entities = list(dedup_map.values())
 
-        entities_section = self._format_entities(deduped_entities)
+        # OPTIMIZATION: Limit entities to 12 (reduced from 15) to save tokens
+        entities_section = self._format_entities(deduped_entities[:12])
         
-        # Get events related to entities in this chapter
+        # OPTIMIZATION: Get events related to entities in this chapter
+        # Only search recent chapters to reduce search space
         events_section = ""
         if self.post_processor and deduped_entities:
             # Extract entity names from deduped_entities
@@ -147,9 +149,14 @@ class ChapterWriter:
             # Also add character names from outline
             character_names = [c.get('name', '') for c in chapter_outline.get('characters', [])]
             all_entity_names = list(set(entity_names + character_names))
-            
-            # Get related events (limit to 15 most important)
-            related_events = self.post_processor.get_events_by_entities(all_entity_names, max_events=15)
+
+            # OPTIMIZATION: Get related events from recent chapters only (last 10 chapters)
+            # Limit to 10 most important events to reduce prompt size
+            related_events = self.post_processor.get_events_by_entities(
+                all_entity_names,
+                max_events=10,  # Reduced from 15 to 10
+                recent_chapters_only=10  # Only search last 10 chapters
+            )
             events_section = self._format_entity_events(related_events)
         
         # Build prompt (removed duplicate sections: characters_section, events_section)
@@ -304,32 +311,33 @@ Chương {chapter_num}: {title}
         """Format events related to entities."""
         if not events:
             return ""
-        
+
         event_list = []
-        for e in events[:15]:  # Limit to 15 most important events
+        # OPTIMIZATION: Reduced from 15 to 10 events
+        for e in events[:10]:
             chapter = e.get('chapter', '?')
             desc = e.get('description', '')
             importance = e.get('importance', 0)
-            
+
             # Include characters and entities involved for context
             chars = e.get('characters_involved', [])
             entities = e.get('entities_involved', [])
-            
+
             event_info = f"- (c{chapter}) {desc}"
-            
-            # Add involved parties if present
+
+            # Add involved parties if present (reduced counts to save tokens)
             involved = []
             if chars:
-                involved.extend(chars[:3])  # Limit to 3 characters
+                involved.extend(chars[:2])  # Reduced from 3 to 2
             if entities:
-                involved.extend(entities[:2])  # Limit to 2 entities
-            
+                involved.extend(entities[:1])  # Reduced from 2 to 1
+
             if involved:
                 event_info += f" | Liên quan: {', '.join(involved)}"
-            
+
             event_info += f" (quan trọng: {importance:.1f})"
             event_list.append(event_info)
-        
+
         return "**Các sự kiện liên quan từ các entity:**\n" + "\n".join(event_list)
     
     def _format_key_events(self, events: List[Dict[str, Any]]) -> str:
