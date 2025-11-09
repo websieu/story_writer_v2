@@ -154,7 +154,7 @@ class ChapterWriter:
         
         # Build prompt (removed duplicate sections: characters_section, events_section)
         prompt = f"""Hãy viết nội dung chi tiết cho chương {chapter_num} dựa trên outline và ngữ cảnh sau:
-
+1.***Yêu cầu viết chương - quan trọng nhất.***
 **OUTLINE CHƯƠNG {chapter_num}: {chapter_outline.get('title')}**
 
 Tóm tắt: {chapter_outline.get('summary')}
@@ -175,7 +175,7 @@ Foreshadowing (Cài cắm):
 
 ---
 
-**NGỮ CẢNH:**
+2.**NGỮ CẢNH: Chỉ được tham khảo**
 
 {motif_section}
 
